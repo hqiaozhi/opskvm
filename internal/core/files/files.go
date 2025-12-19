@@ -354,41 +354,6 @@ func extractFileNameFromURL(urlStr string) string {
 	return fileName
 }
 
-// progressWriter 带进度跟踪的Writer包装器
-type progressWriter struct {
-	writer     io.Writer
-	fileName   string
-	totalSize  int64
-	written    int64
-	manager    *LinuxFilesManager
-	statusChan chan<- *ProgressInfo
-}
-
-// Write 实现io.Writer接口，在写入数据时更新进度
-func (pw *progressWriter) Write(p []byte) (n int, err error) {
-	n, err = pw.writer.Write(p)
-	pw.written += int64(n)
-
-	// 更新进度
-	pw.manager.mutex.Lock()
-	pw.manager.updateDownloadProgress(pw.fileName, pw.written, pw.totalSize, "downloading")
-	pw.manager.mutex.Unlock()
-
-	// 发送进度到通道
-	if pw.statusChan != nil {
-		pw.statusChan <- &ProgressInfo{
-			FileName:     pw.fileName,
-			TotalSize:    pw.totalSize,
-			Completed:    pw.written,
-			Progress:     int(float64(pw.written) / float64(pw.totalSize) * 100),
-			Status:       "downloading",
-			LastModified: time.Now().Unix(),
-		}
-	}
-
-	return n, err
-}
-
 // DownloadISOByURLWithProgress 根据URL下载ISO文件并跟踪进度
 func (fm *LinuxFilesManager) DownloadISOByURLWithProgress(urlStr string) (string, error) {
 	// 从URL中提取文件名作为默认值
