@@ -18,7 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// go:embed dist/*
+//go:embed dist/*
 var assets embed.FS
 
 func Assets() (http.FileSystem, http.FileSystem) {
