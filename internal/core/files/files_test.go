@@ -38,7 +38,7 @@ func createTestISOFile(filePath string) error {
 	return nil
 }
 
-func TestNewLinuxFilesManager(t *testing.T) {
+func TestNew(t *testing.T) {
 	// 创建临时目录
 	tempDir, err := os.MkdirTemp("", "files_test")
 	if err != nil {
@@ -47,7 +47,7 @@ func TestNewLinuxFilesManager(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// 测试创建新的文件管理器
-	fm, err := NewLinuxFilesManager(tempDir)
+	fm, err := New(tempDir)
 	if err != nil {
 		t.Fatalf("创建文件管理器失败: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestUploadISOWithChunk(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// 创建文件管理器
-	fm, err := NewLinuxFilesManager(tempDir)
+	fm, err := New(tempDir)
 	if err != nil {
 		t.Fatalf("创建文件管理器失败: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestGetISOList(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// 创建文件管理器
-	fm, err := NewLinuxFilesManager(tempDir)
+	fm, err := New(tempDir)
 	if err != nil {
 		t.Fatalf("创建文件管理器失败: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestGetISOAbsolutePath(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// 创建文件管理器
-	fm, err := NewLinuxFilesManager(tempDir)
+	fm, err := New(tempDir)
 	if err != nil {
 		t.Fatalf("创建文件管理器失败: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestDeleteISO(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// 创建文件管理器
-	fm, err := NewLinuxFilesManager(tempDir)
+	fm, err := New(tempDir)
 	if err != nil {
 		t.Fatalf("创建文件管理器失败: %v", err)
 	}
@@ -398,7 +398,7 @@ func TestIsValidISO(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// 创建文件管理器
-	fm, err := NewLinuxFilesManager(tempDir)
+	fm, err := New(tempDir)
 	if err != nil {
 		t.Fatalf("创建文件管理器失败: %v", err)
 	}
@@ -441,7 +441,7 @@ func TestDownloadISOByURLWithProgress(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// 创建文件管理器
-	fm, err := NewLinuxFilesManager(tempDir)
+	fm, err := New(tempDir)
 	if err != nil {
 		t.Fatalf("创建文件管理器失败: %v", err)
 	}

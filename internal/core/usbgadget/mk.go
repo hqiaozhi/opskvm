@@ -1,4 +1,4 @@
-package mk
+package usbgadget
 
 import (
 	"errors"
@@ -79,8 +79,8 @@ type LinuxUSBGadget struct {
 	isSetupSuccess bool   // 设备是否初始化成功
 }
 
-// NewLinuxUSBGadget 创建Linux USB Gadget实例（构造函数）
-func NewLinuxUSBGadget(isoPath, gadgetName string, hidReportLen int) *LinuxUSBGadget {
+// New 创建Linux USB Gadget实例（构造函数）
+func New(isoPath, gadgetName string, hidReportLen int) *LinuxUSBGadget {
 	gadgetDir := filepath.Join("/sys/kernel/config/usb_gadget", gadgetName)
 	return &LinuxUSBGadget{
 		isoPath:      isoPath,
@@ -441,9 +441,9 @@ func (g *LinuxUSBGadget) bindFunction(configDir, funcName string) error {
 func main() {
 	// 1. 创建设备实例（灵活配置：ISO路径/设备名称/报告长度）
 	// 场景1：仅键鼠控制（ISO路径为空）
-	// gadget := NewLinuxUSBGadget("", "hid-only-gadget", 8)
+	// gadget := New("", "hid-only-gadget", 8)
 	// 场景2：键鼠+ISO挂载（指定ISO路径）
-	gadget := NewLinuxUSBGadget("/tmp/test.iso", "hid-iso-gadget", 8)
+	gadget := New("/tmp/test.iso", "hid-iso-gadget", 8)
 
 	// 2. 延迟清理资源
 	defer func() {

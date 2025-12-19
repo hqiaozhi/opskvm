@@ -90,7 +90,7 @@ type LinuxFilesManager struct {
 // NewLinuxFilesManager 创建文件管理器实例
 // 参数：baseDir ISO文件存储的基础目录
 // 返回：文件管理器实例，错误信息
-func NewLinuxFilesManager(baseDir string) (*LinuxFilesManager, error) {
+func New(baseDir string) (*LinuxFilesManager, error) {
 	// 验证基础目录是否存在
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		// 目录不存在则创建

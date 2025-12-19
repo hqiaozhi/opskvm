@@ -1,4 +1,4 @@
-package mk
+package usbgadget
 
 import (
 	"os"
@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-// TestNewLinuxUSBGadget 测试构造函数
-func TestNewLinuxUSBGadget(t *testing.T) {
+// TestNew 测试构造函数
+func TestNew(t *testing.T) {
 	// 测试场景1：仅HID模式（无ISO）
-	gadget := NewLinuxUSBGadget("", "test-gadget", 8)
+	gadget := New("", "test-gadget", 8)
 	if gadget == nil {
 		t.Fatal("构造函数返回nil")
 	}
@@ -27,7 +27,7 @@ func TestNewLinuxUSBGadget(t *testing.T) {
 	}
 
 	// 测试场景2：HID+ISO模式
-	gadgetWithISO := NewLinuxUSBGadget("/test.iso", "test-gadget-iso", 16)
+	gadgetWithISO := New("/test.iso", "test-gadget-iso", 16)
 	if gadgetWithISO == nil {
 		t.Fatal("构造函数返回nil")
 	}
@@ -41,7 +41,7 @@ func TestNewLinuxUSBGadget(t *testing.T) {
 
 // TestContains 测试字符串包含方法
 func TestContains(t *testing.T) {
-	gadget := NewLinuxUSBGadget("", "test-gadget", 8)
+	gadget := New("", "test-gadget", 8)
 
 	// 测试正常包含
 	if !gadget.contains("ISO 9660 CD-ROM", "ISO 9660") {
@@ -85,7 +85,7 @@ func TestKeyboardKeyMapping(t *testing.T) {
 
 // TestValidateISO_NonExistentFile 测试验证不存在的ISO文件
 func TestValidateISO_NonExistentFile(t *testing.T) {
-	gadget := NewLinuxUSBGadget("/non/existent/file.iso", "test-gadget", 8)
+	gadget := New("/non/existent/file.iso", "test-gadget", 8)
 	err := gadget.ValidateISO()
 	if err == nil {
 		t.Error("期望验证失败，实际成功")
@@ -97,7 +97,7 @@ func TestValidateISO_NonExistentFile(t *testing.T) {
 
 // TestValidateISO_EmptyPath 测试空路径验证
 func TestValidateISO_EmptyPath(t *testing.T) {
-	gadget := NewLinuxUSBGadget("", "test-gadget", 8)
+	gadget := New("", "test-gadget", 8)
 	err := gadget.ValidateISO()
 	if err == nil {
 		t.Error("期望空路径验证失败，实际成功")

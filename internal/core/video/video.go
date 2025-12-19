@@ -18,7 +18,7 @@ type VideoStreamer struct {
 }
 
 // NewVideoStreamer 创建一个新的视频流管理器
-func NewVideoStreamer(devicePath string, width, height int) (*VideoStreamer, error) {
+func New(devicePath string, width, height int) (*VideoStreamer, error) {
 	// 打开视频设备
 	cam, err := webcam.Open(devicePath)
 	if err != nil {

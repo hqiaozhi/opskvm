@@ -25,7 +25,7 @@ func TestVideoStreamer_Creation(t *testing.T) {
 	}
 
 	// 创建视频流
-	streamer, err := NewVideoStreamer(testDevicePath, testWidth, testHeight)
+	streamer, err := New(testDevicePath, testWidth, testHeight)
 	if err != nil {
 		t.Fatalf("failed to create video streamer: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestVideoStreamer_ReadFrame(t *testing.T) {
 	}
 
 	// 创建视频流
-	streamer, err := NewVideoStreamer(testDevicePath, testWidth, testHeight)
+	streamer, err := New(testDevicePath, testWidth, testHeight)
 	if err != nil {
 		t.Fatalf("failed to create video streamer: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestVideoStreamer_Close(t *testing.T) {
 	}
 
 	// 创建视频流
-	streamer, err := NewVideoStreamer(testDevicePath, testWidth, testHeight)
+	streamer, err := New(testDevicePath, testWidth, testHeight)
 	if err != nil {
 		t.Fatalf("failed to create video streamer: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestVideoStreamer_ConcurrentAccess(t *testing.T) {
 	}
 
 	// 创建视频流
-	streamer, err := NewVideoStreamer(testDevicePath, testWidth, testHeight)
+	streamer, err := New(testDevicePath, testWidth, testHeight)
 	if err != nil {
 		t.Fatalf("failed to create video streamer: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestVideoStreamer_SaveToMP4(t *testing.T) {
 	// }()
 
 	// 创建视频流
-	streamer, err := NewVideoStreamer(testDevicePath, testWidth, testHeight)
+	streamer, err := New(testDevicePath, testWidth, testHeight)
 	if err != nil {
 		t.Fatalf("failed to create video streamer: %v", err)
 	}
