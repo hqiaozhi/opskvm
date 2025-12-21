@@ -12,7 +12,7 @@ func RegisterBusinessRoutes(engine *GinEngine) {
 	// ctx := engine.svcCtx
 
 	// 健康检查路由
-	engine.ginEngine.GET("/health", func(c *gin.Context) {
+	engine.ginEngine.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "ok",
 		})

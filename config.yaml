@@ -1,20 +1,20 @@
 app:
-  host: 0.0.0.0
-  mode: debug
-  port: 8080
-  idle_timeout: 15s
-  max_multipart_memory: 10485760
-  read_timeout: 5s
-  write_timeout: 10s
+  opskvm_host: 0.0.0.0
+  opskvm_mode: debug
+  opskvm_port: 8080
+  opskvm_idle_timeout: 15s
+  opskvm_max_multipart_memory: 10485760
+  opskvm_read_timeout: 5s
+  opskvm_write_timeout: 10s
 
 jwt:
-  audience: api-users
-  expire_hours: 2
-  issuer: dnsm
-  refresh_hours: 24
-  secret_key: default-secret-key-32bytes-long-1234
-  signing_method: HS256
+  opskvm_audience: api-users
+  opskvm_expire_hours: 2
+  opskvm_issuer: dnsm
+  opskvm_refresh_hours: 24
+  opskvm_secret_key: default-secret-key-32bytes-long-1234
+  opskvm_signing_method: HS256
 
 login:
-  username: admin
-  password: admin123
+  username: opskvm_admin
+  password: opskvm_admin123

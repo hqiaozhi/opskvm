@@ -11,33 +11,33 @@ import (
 const configFileName = "config"
 
 type JWTConfig struct {
-	SecretKey     string        `mapstructure:"secret_key"`     // 密钥（必须保密）
-	Issuer        string        `mapstructure:"issuer"`         // 签发者
-	Audience      string        `mapstructure:"audience"`       // 受众
-	ExpireHours   time.Duration `mapstructure:"expire_hours"`   // 过期时间（小时）
-	RefreshHours  time.Duration `mapstructure:"refresh_hours"`  // 刷新令牌过期时间（小时）
-	SigningMethod string        `mapstructure:"signing_method"` // 签名算法（HS256/HS512）
+	SecretKey     string        `mapstructure:"opskvm_secret_key"`     // 密钥（必须保密）
+	Issuer        string        `mapstructure:"opskvm_issuer"`         // 签发者
+	Audience      string        `mapstructure:"opskvm_audience"`       // 受众
+	ExpireHours   time.Duration `mapstructure:"opskvm_expire_hours"`   // 过期时间（小时）
+	RefreshHours  time.Duration `mapstructure:"opskvm_refresh_hours"`  // 刷新令牌过期时间（小时）
+	SigningMethod string        `mapstructure:"opskvm_signing_method"` // 签名算法（HS256/HS512）
 }
 
 type LoginUser struct {
-	Username string `mapstructure:"username"` // 用户名
-	Password string `mapstructure:"password"` // 密码
+	Username string `mapstructure:"opskvm_username"` // 用户名
+	Password string `mapstructure:"opskvm_password"` // 密码
 }
 
 type AppConfig struct {
-	Host               string        `mapstructure:"host"`
-	Port               int           `mapstructure:"port"`
-	Mode               string        `mapstructure:"mode"`                 // 运行模式（debug/release/test）
-	ReadTimeout        time.Duration `mapstructure:"read_timeout"`         // 读取超时
-	WriteTimeout       time.Duration `mapstructure:"write_timeout"`        // 写入超时
-	IdleTimeout        time.Duration `mapstructure:"idle_timeout"`         // 空闲超时
-	MaxMultipartMemory int64         `mapstructure:"max_multipart_memory"` // 最大上传内存
+	Host               string        `mapstructure:"opskvm_host"`
+	Port               int           `mapstructure:"opskvm_port"`
+	Mode               string        `mapstructure:"opskvm_mode"`                 // 运行模式（debug/release/test）
+	ReadTimeout        time.Duration `mapstructure:"opskvm_read_timeout"`         // 读取超时
+	WriteTimeout       time.Duration `mapstructure:"opskvm_write_timeout"`        // 写入超时
+	IdleTimeout        time.Duration `mapstructure:"opskvm_idle_timeout"`         // 空闲超时
+	MaxMultipartMemory int64         `mapstructure:"opskvm_max_multipart_memory"` // 最大上传内存
 }
 
 type Config struct {
-	JWT   JWTConfig `mapstructure:"jwt"`
-	App   AppConfig `mapstructure:"app"`
-	Login LoginUser `mapstructure:"login"`
+	JWT   JWTConfig `mapstructure:"opskvm_jwt"`
+	App   AppConfig `mapstructure:"opskvm_app"`
+	Login LoginUser `mapstructure:"opskvm_login"`
 }
 
 // LoadConfig 初始化并加载配置
