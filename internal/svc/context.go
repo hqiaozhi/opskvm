@@ -13,7 +13,7 @@ import (
 type SvcContext struct {
 	Conf      *conf.Config
 	Files     *files.LinuxFilesManager
-	Video     *video.VideoStreamer
+	Video     video.VideoManager
 	USBGadget *usbgadget.LinuxUSBGadget
 	RESP      *resp.Resp
 	JWT       *jwt.JwtService
@@ -37,11 +37,8 @@ func New(ctx context.Context) *SvcContext {
 	s.Files = f
 
 	// 初始化视频服务
-	video, err := video.New("/dev/video0", 1920, 1080)
-	if err != nil {
-		panic(err)
-	}
-	s.Video = video
+	Video := video.New()
+	s.Video = Video
 
 	// 初始化USB Gadget服务
 	s.USBGadget = usbgadget.New("", "test-gadget", 8)

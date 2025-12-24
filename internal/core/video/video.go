@@ -1,138 +1,135 @@
 package video
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"sync"
 
-	"github.com/blackjack/webcam"
+	"github.com/korandiz/v4l"
+	"github.com/korandiz/v4l/fmt/mjpeg"
 )
 
-// VideoStreamer 管理视频流的生命周期
-type VideoStreamer struct {
-	cam         *webcam.Webcam
-	pixelFormat webcam.PixelFormat
-	width       int
-	height      int
-	running     bool
-	mu          sync.Mutex
-}
-
-// NewVideoStreamer 创建一个新的视频流管理器
-func New(devicePath string, width, height int) (*VideoStreamer, error) {
-	// 打开视频设备
-	cam, err := webcam.Open(devicePath)
+func New() VideoManager {
+	v := &Config{
+		Path:   "/dev/video0",
+		Width:  1920,
+		Height: 1080,
+		FPS:    10,
+	}
+	err := v.Open()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open video device: %w", err)
+		panic(err)
 	}
-
-	// 获取支持的像素格式
-	formats := cam.GetSupportedFormats()
-	if len(formats) == 0 {
-		cam.Close()
-		return nil, fmt.Errorf("no supported pixel formats found")
-	}
-
-	// 优先选择MJPEG像素格式（更高质量），如果没有则选择第一个可用格式
-	var pixelFormat webcam.PixelFormat
-	mjpegFound := false
-	for pf := range formats {
-		// MJPEG格式的4CC代码是'MJPG'
-		if uint32(pf) == 1196444237 { // 1196444237 is the uint32 value for 'MJPG'
-			pixelFormat = pf
-			mjpegFound = true
-			break
-		}
-	}
-
-	// 如果没有找到MJPEG，则选择第一个可用格式
-	if !mjpegFound {
-		for pf := range formats {
-			pixelFormat = pf
-			break
-		}
-	}
-
-	// 设置视频格式
-	_, _, _, err = cam.SetImageFormat(pixelFormat, uint32(width), uint32(height))
+	err = v.SetConfig()
 	if err != nil {
-		cam.Close()
-		return nil, fmt.Errorf("failed to set image format: %w", err)
+		panic(err)
 	}
-
-	// 初始化缓冲区
-	err = cam.StartStreaming()
+	err = v.cam.TurnOn()
 	if err != nil {
-		cam.Close()
-		return nil, fmt.Errorf("failed to start streaming: %w", err)
+		panic(err)
 	}
-
-	return &VideoStreamer{
-		cam:         cam,
-		pixelFormat: pixelFormat,
-		width:       width,
-		height:      height,
-		running:     true,
-	}, nil
-}
-
-// ReadFrame 读取一帧视频数据
-func (vs *VideoStreamer) ReadFrame() ([]byte, error) {
-	vs.mu.Lock()
-	defer vs.mu.Unlock()
-
-	if !vs.running {
-		return nil, fmt.Errorf("video streamer is not running")
-	}
-
-	// 等待帧可用，设置1秒超时
-	err := vs.cam.WaitForFrame(1)
+	cfg, err := v.cam.GetConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to wait for frame: %w", err)
+		panic(err)
 	}
+	fmt.Printf("FPS: %d, Format: %d, Width: %d, Height: %d\n", cfg.FPS.N, cfg.Format, cfg.Width, cfg.Height)
 
-	// 读取帧数据
-	frame, err := vs.cam.ReadFrame()
+	ctrls, err := v.cam.ListControls()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read frame: %w", err)
+		panic(err)
+	}
+	for _, ctrl := range ctrls {
+		v.cam.SetControl(ctrl.CID, ctrl.Default)
 	}
 
-	return frame, nil
+	go handleInterrupt()
+	go stream(v.cam)
+
+	return v
 }
 
-// Close 关闭视频流
-func (vs *VideoStreamer) Close() error {
-	vs.mu.Lock()
-	defer vs.mu.Unlock()
+// GetDevicesPath 获取所有视频设备路径
+func (v *Config) GetPath() []string {
+	var paths []string
+	devs := v4l.FindDevices()
+	for _, dev := range devs {
+		paths = append(paths, dev.Path)
+	}
+	return paths
+}
 
-	if !vs.running {
-		return nil
+// 开启设备
+func (v *Config) Open() error {
+	cam, err := v4l.Open(v.Path)
+	if err != nil {
+		return err
+	}
+	v.cam = cam
+	return nil
+}
+
+type deviceSupportConfig struct {
+	Width  int
+	Height int
+	FPS    int
+}
+
+// GetConfig 获取当前设备支持的配置
+func (v *Config) ListConfigs() (map[string][]deviceSupportConfig, error) {
+	dsc_map := make(map[string][]deviceSupportConfig)
+	if v.cam == nil {
+		return nil, nil
+	}
+	devCfg, err := v.cam.ListConfigs()
+	if err != nil {
+		return nil, err
 	}
 
-	vs.running = false
+	var dsc []deviceSupportConfig
+	for _, cfg := range devCfg {
+		dsc = append(dsc, deviceSupportConfig{
+			Width:  int(cfg.Width),
+			Height: int(cfg.Height),
+			FPS:    int(cfg.FPS.N) / int(cfg.FPS.D),
+		})
+	}
+	dsc_map[v.Path] = dsc
 
-	// 停止流并关闭设备
-	vs.cam.StopStreaming()
-	return vs.cam.Close()
+	return dsc_map, nil
 }
 
-// Width 返回视频宽度
-func (vs *VideoStreamer) Width() int {
-	return vs.width
+// SetConfig 设置设备配置
+func (v *Config) SetConfig() error {
+	cfg, err := v.cam.GetConfig()
+	if err != nil {
+		return err
+	}
+	cfg.FPS = v4l.Frac{N: uint32(v.FPS), D: 1}
+	cfg.Format = mjpeg.FourCC
+	cfg.Width = v.Width
+	cfg.Height = v.Height
+	// 将修改后的配置应用到摄像头设备
+	return v.cam.SetConfig(cfg)
 }
 
-// Height 返回视频高度
-func (vs *VideoStreamer) Height() int {
-	return vs.height
+// StreamClient 视频流处理
+func (v *Config) StreamClient(ctx context.Context) (*Client, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	if stopped {
+		return nil, errors.New("video stream is stopped")
+	}
+	clt := &Client{
+		i:  len(clients),
+		CH: make(chan []byte, 1),
+	}
+	// 不再发送nil帧，等待stream函数发送实际的视频帧
+	clients = append(clients, clt)
+	return clt, nil
 }
 
-// PixelFormat 返回像素格式
-func (vs *VideoStreamer) PixelFormat() webcam.PixelFormat {
-	return vs.pixelFormat
-}
-
-// IsRunning 检查视频流是否正在运行
-func (vs *VideoStreamer) IsRunning() bool {
-	vs.mu.Lock()
-	defer vs.mu.Unlock()
-	return vs.running
+// 关闭设备
+func (v *Config) Close() error {
+	v.cam.Close()
+	return nil
 }

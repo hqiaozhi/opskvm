@@ -1,4 +1,4 @@
-app:
+opskvm_app:
   opskvm_host: 0.0.0.0
   opskvm_mode: debug
   opskvm_port: 8080
@@ -7,7 +7,7 @@ app:
   opskvm_read_timeout: 5s
   opskvm_write_timeout: 10s
 
-jwt:
+opskvm_jwt:
   opskvm_audience: api-users
   opskvm_expire_hours: 2
   opskvm_issuer: dnsm
@@ -15,6 +15,6 @@ jwt:
   opskvm_secret_key: default-secret-key-32bytes-long-1234
   opskvm_signing_method: HS256
 
-login:
+opskvm_login:
   username: opskvm_admin
   password: opskvm_admin123
