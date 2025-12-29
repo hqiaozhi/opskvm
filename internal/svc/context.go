@@ -4,19 +4,17 @@ import (
 	"context"
 	"opskvm/internal/conf"
 	"opskvm/internal/core/files"
-	"opskvm/internal/core/usbgadget"
 	"opskvm/internal/core/video"
 	"opskvm/internal/utils/jwt"
 	"opskvm/internal/utils/resp"
 )
 
 type SvcContext struct {
-	Conf      *conf.Config
-	Files     *files.LinuxFilesManager
-	Video     video.VideoManager
-	USBGadget *usbgadget.LinuxUSBGadget
-	RESP      *resp.Resp
-	JWT       *jwt.JwtService
+	Conf  *conf.Config
+	Files *files.LinuxFilesManager
+	Video video.VideoManager
+	RESP  *resp.Resp
+	JWT   *jwt.JwtService
 }
 
 func New(ctx context.Context) *SvcContext {
@@ -41,7 +39,6 @@ func New(ctx context.Context) *SvcContext {
 	s.Video = Video
 
 	// 初始化USB Gadget服务
-	s.USBGadget = usbgadget.New("", "test-gadget", 8)
 
 	// 响应
 	R := resp.New()
