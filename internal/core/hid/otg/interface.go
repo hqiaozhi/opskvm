@@ -12,10 +12,18 @@ type GadgetInterface interface {
 	startFunction(funcName string, eps int) error
 	createMeta(funcName, funcDesc string, eps int) error
 	// HID设备管理
-	addKeyboard(start bool, remoteWakeup bool) error
-	addMouse(start bool, remoteWakeup bool, absolute bool, horizontalWheel bool) error
+	// 通用HID设备添加
 	addHID(desc string, start bool, remoteWakeup bool, hid Hid) error
+
+	// 键盘
+	addKeyboard(start bool, remoteWakeup bool) error
+	// 鼠标
+	addMouse(start bool, remoteWakeup bool, absolute bool, horizontalWheel bool) error
+
+	// 网络设备管理
 	addEthernet(start bool, driver, hostMAC, kvmMAC string) error
+	// 大容量存储设备管理
 	addMSD(start bool) error
+	// 串口设备管理
 	addSerial(start bool) error
 }

@@ -1,11 +1,12 @@
-package otgdevices
+package otg
 
 import (
 	"fmt"
+	"testing"
 )
 
 // ExampleStartOTG 演示如何使用StartOTG函数启动OTG设备
-func ExampleStartOTG() {
+func TestExampleStartOTG(t *testing.T) {
 	// 创建配置
 	config := GadgetConfig{
 		VendorID:      0x1D6B, // Linux Foundation
@@ -70,38 +71,4 @@ func ExampleStartOTG() {
 	// }
 
 	// fmt.Println("OTG device stopped successfully")
-}
-
-// ExamplevalidateMAC 演示如何使用validateMAC函数验证MAC地址
-func ExamplevalidateMAC() {
-	macAddresses := []string{
-		"00:11:22:33:44:55", // 有效
-		"AA:BB:CC:DD:EE:FF", // 有效
-		"00:11:22:33:44",    // 无效（长度错误）
-		"00:11:22:33:44:GG", // 无效（字符错误）
-		"",                  // 有效（空字符串）
-	}
-
-	for _, mac := range macAddresses {
-		if validateMAC(mac) {
-			fmt.Printf("%s is a valid MAC address\n", mac)
-		} else {
-			fmt.Printf("%s is NOT a valid MAC address\n", mac)
-		}
-	}
-}
-
-// ExamplegetGadgetPath 演示如何使用getGadgetPath函数构建路径
-func ExamplegetGadgetPath() {
-	// 构建默认路径
-	path1 := getGadgetPath("/", "g1")
-	fmt.Printf("Default path: %s\n", path1)
-
-	// 构建带有配置的路径
-	path2 := getGadgetPath("/", "g1", "configs", "c.1")
-	fmt.Printf("Path with config: %s\n", path2)
-
-	// 构建带有自定义sysfs前缀的路径
-	path3 := getGadgetPath("/sysroot", "g1")
-	fmt.Printf("Path with custom prefix: %s\n", path3)
 }

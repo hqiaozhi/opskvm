@@ -8,6 +8,14 @@ import (
 	"syscall"
 )
 
+type WOLInterface interface {
+	SendMagicPacket() error
+
+	// macToBytes converts MAC address to byte slice
+	// 私有方法
+	macToBytes() ([]byte, error)
+}
+
 // WOL represents a Wake-on-LAN configuration
 type WOL struct {
 	IP   string
@@ -16,7 +24,7 @@ type WOL struct {
 }
 
 // NewWOL creates a new WOL instance with validation
-func NewWOL(ip string, port int, mac string) (*WOL, error) {
+func NewWOL(ip string, port int, mac string) (WOLInterface, error) {
 	// Validate MAC address
 	if !ValidMAC(mac) {
 		return nil, fmt.Errorf("invalid MAC address format: %s", mac)
