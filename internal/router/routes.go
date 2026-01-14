@@ -22,16 +22,18 @@ func RegisterBusinessRoutes(engine *GinEngine) {
 	// 视频路由
 	videoHandler := video.NewVideoHandler(ctx)
 
-	// WebSocket视频流
-	engine.ginEngine.GET("/ws/video", videoHandler.WebSocket)
-
 	// 版本：/api/v1
 	v1 := engine.Group("/api/v1")
 	{
 		// 公共路由组
-		_ = v1.Group("")
+		videoGroup := v1.Group("/video")
 		{
-
+			videoGroup.GET("", videoHandler.ServeStream)
+			videoGroup.GET("/config", videoHandler.GetConfigHandler)
+			videoGroup.POST("/config", videoHandler.UpdateConfigHandler)
+			videoGroup.GET("/configs", videoHandler.GetSupportedConfigsHandler)
+			videoGroup.POST("/on", videoHandler.TurnOnHandler)
+			videoGroup.POST("/off", videoHandler.TurnOffHandler)
 		}
 
 	}

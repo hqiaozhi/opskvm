@@ -1,122 +1,252 @@
 package video
 
 import (
-	"context"
-	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	v1 "opskvm/api/video/v1"
-	"opskvm/internal/logic/video"
+	"opskvm/internal/core/video"
 	"opskvm/internal/svc"
 
+	"github.com/korandiz/v4l/fmt/mjpeg"
+
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 )
 
 // VideoHandler 视频处理器
 type VideoHandler struct {
-	logic  *video.Logic
 	svcCtx *svc.SvcContext
 }
 
 // NewVideoHandler 创建视频处理器实例
 func NewVideoHandler(svcCtx *svc.SvcContext) *VideoHandler {
 	return &VideoHandler{
-		logic:  video.NewLogic(svcCtx),
 		svcCtx: svcCtx,
 	}
 }
 
-// WebSocket WebSocket视频流处理
-func (h *VideoHandler) WebSocket(c *gin.Context) {
-	log.Printf("New WebSocket connection from %s", c.ClientIP())
-
-	// 升级HTTP连接为WebSocket连接
-	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true // 允许所有来源
-		},
-		WriteBufferSize: 1024 * 1024, // 1MB写入缓冲区
-	}
-
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+// GetConfigHandler 处理GET /api/config（查询配置）
+func (s *VideoHandler) GetConfigHandler(c *gin.Context) {
+	cfg, err := s.svcCtx.Camera.GetConfig()
 	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
+		c.JSON(http.StatusInternalServerError, v1.ConfigResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to get config: %v", err),
+		})
 		return
 	}
-	defer func() {
-		if err := conn.Close(); err != nil {
-			log.Printf("WebSocket close error: %v", err)
+
+	// 构建响应
+	resp := v1.ConfigResponse{
+		Success: true,
+		Config: &video.Config{
+			Width:  cfg.Width,
+			Height: cfg.Height,
+			FPS:    float64(cfg.FPS.N) / float64(cfg.FPS.D),
+		},
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// GetSupportedConfigsHandler 处理GET /api/configs（查询支持的配置列表）
+func (s *VideoHandler) GetSupportedConfigsHandler(c *gin.Context) {
+	// 获取设备支持的配置列表
+	supportedCfgs, err := s.svcCtx.Camera.ListConfigs()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, v1.ConfigResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to get supported configs: %v", err),
+		})
+		return
+	}
+
+	// 过滤并转换为简化的Config格式（只返回MJPEG格式的配置）
+	var configs []*video.Config
+	for _, cfg := range supportedCfgs {
+		if cfg.Format == mjpeg.FourCC {
+			configs = append(configs, &video.Config{
+				Width:  cfg.Width,
+				Height: cfg.Height,
+				FPS:    float64(cfg.FPS.N) / float64(cfg.FPS.D),
+			})
 		}
+	}
+
+	// 构建响应
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"configs": configs,
+	})
+}
+
+// UpdateConfigHandler 处理POST /api/config（修改配置）
+func (s *VideoHandler) UpdateConfigHandler(c *gin.Context) {
+	// 绑定并校验请求体（Gin自动校验binding标签）
+	var req v1.ConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, v1.ConfigResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Invalid request: %v", err),
+		})
+		return
+	}
+
+	// 暂停流分发，避免配置更新冲突（延长暂停时间，适配设备重启）
+	s.svcCtx.Streamer.Pause()
+	defer func() {
+		// 恢复流分发前短暂延迟，确保设备完全启动
+		time.Sleep(200 * time.Millisecond)
+		s.svcCtx.Streamer.Resume()
 	}()
 
-	log.Println("New WebSocket connection established")
+	// 更新摄像头配置
+	actualCfg, err := s.svcCtx.Camera.UpdateConfig(req.Width, req.Height, uint32(req.FPS))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, v1.ConfigResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to update config: %v", err),
+		})
+		return
+	}
 
-	// 设置连接参数
-	conn.SetReadLimit(512)                                // 限制客户端消息大小
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) // 读取超时
-	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-		return nil
+	// 构建成功响应
+	c.JSON(http.StatusOK, v1.ConfigResponse{
+		Success: true,
+		Message: "Config updated successfully (device restarted)",
+		Config: &video.Config{
+			Width:  actualCfg.Width,
+			Height: actualCfg.Height,
+			FPS:    float64(actualCfg.FPS.N) / float64(actualCfg.FPS.D),
+		},
 	})
+}
 
-	// 读取客户端请求参数
-	_, msg, err := conn.ReadMessage()
+// TurnOnHandler 处理POST /api/on（打开摄像头）
+func (s *VideoHandler) TurnOnHandler(c *gin.Context) {
+	// 打开摄像头
+	err := s.svcCtx.Camera.TurnOn()
 	if err != nil {
-		log.Printf("Read WebSocket message error: %v", err)
+		c.JSON(http.StatusInternalServerError, v1.ConfigResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to turn on camera: %v", err),
+		})
 		return
 	}
 
-	var req v1.VideoRequest
-	if err := json.Unmarshal(msg, &req); err != nil {
-		log.Printf("Parse WebSocket message error: %v", err)
-		// 发送错误响应
-		if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"Invalid request"}`)); err != nil {
-			log.Printf("Write error response error: %v", err)
-		}
-		return
-	}
+	// 构建成功响应
+	c.JSON(http.StatusOK, v1.ConfigResponse{
+		Success: true,
+		Message: "Camera turned on successfully",
+	})
+}
 
-	log.Printf("Received WebSocket request: %+v", req)
-
-	// 创建上下文用于控制视频流
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// 启动视频流
-	clt, err := h.logic.StreamClient(ctx)
+// TurnOffHandler 处理POST /api/off（关闭摄像头）
+func (s *VideoHandler) TurnOffHandler(c *gin.Context) {
+	// 关闭摄像头
+	err := s.svcCtx.Camera.TurnOff()
 	if err != nil {
-		log.Printf("Video stream error: %v", err)
+		c.JSON(http.StatusInternalServerError, v1.ConfigResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to turn off camera: %v", err),
+		})
 		return
 	}
-	defer clt.Remove()
-	log.Println("视频流已启动")
-	// 发送视频帧
+
+	// 构建成功响应
+	c.JSON(http.StatusOK, v1.ConfigResponse{
+		Success: true,
+		Message: "Camera turned off successfully",
+	})
+}
+
+// ServeStream MJPEG流处理（兼容原生Hijack）
+func (s *VideoHandler) ServeStream(c *gin.Context) {
+	log.Printf("[%s] New stream connection", c.ClientIP())
+
+	// 获取原生ResponseWriter
+	w := c.Writer
+
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		log.Printf("[%s] ResponseWriter is not a Hijacker", c.ClientIP())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, v1.ConfigResponse{
+			Success: false,
+			Error:   "Internal Server Error",
+		})
+		return
+	}
+
+	conn, _, err := hj.Hijack()
+	if err != nil {
+		log.Printf("[%s] Hijack error: %v", c.ClientIP(), err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, v1.ConfigResponse{
+			Success: false,
+			Error:   "Internal Server Error",
+		})
+		return
+	}
+	defer conn.Close()
+
+	clt := s.svcCtx.Streamer.AddClient()
+	if clt == nil {
+		return
+	}
+	defer s.svcCtx.Streamer.RemoveClient(clt)
+
+	const boundary = "45c7pIy0cxa4vWtwGuVuAkbzKAQGpRjz9eyhyHTv"
+
+	// 发送响应头
+	respHeader := []byte(
+		"HTTP/1.1 200 OK\r\n" +
+			"Date: " + time.Now().UTC().Format(http.TimeFormat) + "\r\n" +
+			"Content-Type: multipart/x-mixed-replace; boundary=" + boundary + "\r\n" +
+			"Cache-Control: no-cache, no-store, max-age=0, must-revalidate\r\n" +
+			"Pragma: no-cache\r\n" +
+			"\r\n" +
+			"--" + boundary + "\r\n",
+	)
+	if _, err := conn.Write(respHeader); err != nil {
+		log.Printf("[%s] Write header error: %v", c.ClientIP(), err)
+		return
+	}
+
+	// 持续发送帧数据
 	for {
-		buf := <-clt.CH
-		if buf == nil {
-			log.Printf("[%s] Received nil frame, trying to reconnect", c.ClientIP())
-			// 尝试重新获取视频流
-			cancel()
-			newCtx, newCancel := context.WithCancel(context.Background())
-			newClt, err := h.logic.StreamClient(newCtx)
-			if err != nil {
-				log.Printf("[%s] Reconnect error: %v", c.ClientIP(), err)
-				newCancel() // 确保新的 cancel 函数被调用
-				return
-			}
-			clt.Remove()
-			clt = newClt
-			ctx = newCtx
-			cancel = newCancel
-			continue
+		buf, ok := <-clt.Ch
+		if !ok {
+			log.Printf("[%s] Connection closed", c.ClientIP())
+			return
 		}
 
-		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-		if err := conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
-			log.Printf("[%s] Write frame error: %v", c.ClientIP(), err)
+		conn.SetDeadline(time.Now().Add(time.Second))
+
+		// 发送帧头
+		if _, err := conn.Write([]byte("Content-Type: image/jpeg\r\n\r\n")); err != nil {
+			log.Printf("[%s] Write frame header error: %v", c.ClientIP(), err)
+			return
+		}
+
+		// 发送帧数据
+		if buf == nil {
+			if _, err := conn.Write(s.svcCtx.Streamer.(*video.MJPEGStreamer).Blank); err == nil {
+				conn.Write([]byte("--" + boundary + "--\r\n"))
+			} else {
+				log.Printf("[%s] Write blank frame error: %v", c.ClientIP(), err)
+			}
+			log.Printf("[%s] Quitting", c.ClientIP())
+			return
+		}
+
+		if _, err := conn.Write(buf); err != nil {
+			log.Printf("[%s] Write frame data error: %v", c.ClientIP(), err)
+			return
+		}
+
+		// 发送边界
+		if _, err := conn.Write([]byte("--" + boundary + "\r\n")); err != nil {
+			log.Printf("[%s] Write boundary error: %v", c.ClientIP(), err)
 			return
 		}
 	}

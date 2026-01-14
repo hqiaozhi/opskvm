@@ -3,6 +3,9 @@ opskvm_app:
   opskvm_mode: "debug"
   opskvm_port: 8080
   opskvm_video_path: "/dev/video0"
+  opskvm_video_width: 1920
+  opskvm_video_height: 1080
+  opskvm_video_fps: 30
   opskvm_idle_timeout: "15s"
   opskvm_max_multipart_memory: "10485760"
   opskvm_read_timeout: "5s"

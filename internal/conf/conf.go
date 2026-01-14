@@ -28,10 +28,14 @@ type AppConfig struct {
 	Host               string        `mapstructure:"opskvm_host"`
 	Port               int           `mapstructure:"opskvm_port"`
 	Mode               string        `mapstructure:"opskvm_mode"`                 // 运行模式（debug/release/test）
+	VideoPath          string        `mapstructure:"opskvm_video_path"`           // 视频设备路径（默认/dev/video0）
+	VideoWidth         int           `mapstructure:"opskvm_video_width"`          // 视频宽度（默认1920）
+	VideoHeight        int           `mapstructure:"opskvm_video_height"`         // 视频高度（默认1080）
+	VideoFPS           int           `mapstructure:"opskvm_video_fps"`            // 视频帧率（默认30）
 	ReadTimeout        time.Duration `mapstructure:"opskvm_read_timeout"`         // 读取超时
 	WriteTimeout       time.Duration `mapstructure:"opskvm_write_timeout"`        // 写入超时
 	IdleTimeout        time.Duration `mapstructure:"opskvm_idle_timeout"`         // 空闲超时
-	MaxMultipartMemory int64         `mapstructure:"opskvm_max_multipart_memory"` // 最大上传内存
+	MaxMultipartMemory int64         `mapstructure:"opskvm_max_multipart_memory"` // 最大上传内存（默认10485760）
 }
 
 type Config struct {

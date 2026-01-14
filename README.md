@@ -8,5 +8,6 @@ go build -o opskvm
 cp opskvm /usr/local/bin/ && chmod +x /usr/local/bin/opskvm
 
 # 创建配置文件config.yaml
-
+mkdir -p /etc/opskvm
+cp config.yaml /etc/opskvm/config.yaml
 ```
