@@ -20,5 +20,5 @@ opskvm_jwt:
   opskvm_signing_method: "HS256"
 
 opskvm_login:
-  username: "opskvm_admin"
-  password: "opskvm_admin123"
+  username: "admin"
+  password: "admin123"

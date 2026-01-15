@@ -20,8 +20,8 @@ type JWTConfig struct {
 }
 
 type LoginUser struct {
-	Username string `mapstructure:"opskvm_username"` // 用户名
-	Password string `mapstructure:"opskvm_password"` // 密码
+	Username string `mapstructure:"username"` // 用户名
+	Password string `mapstructure:"password"` // 密码
 }
 
 type AppConfig struct {

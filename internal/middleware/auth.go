@@ -11,6 +11,17 @@ import (
 // Auth JWT 认证中间件（解析 Bearer Token）
 func Auth(ctx *svc.SvcContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 跳过登录路由
+		if c.Request.URL.Path == "/api/v1/user/login" {
+			c.Next()
+			return
+		}
+
+		if c.Request.URL.Path == "/api/v1/video" {
+			c.Next()
+			return
+		}
+
 		// 1. 从 Authorization 头获取 Token
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {

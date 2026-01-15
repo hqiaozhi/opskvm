@@ -10,6 +10,7 @@ import (
 	"opskvm/internal/core/video"
 	"opskvm/internal/svc"
 
+	"github.com/gorilla/websocket"
 	"github.com/korandiz/v4l/fmt/mjpeg"
 
 	"github.com/gin-gonic/gin"
@@ -161,30 +162,26 @@ func (s *VideoHandler) TurnOffHandler(c *gin.Context) {
 	})
 }
 
-// ServeStream MJPEG流处理（兼容原生Hijack）
+// ServeStream WebSocket流处理
 func (s *VideoHandler) ServeStream(c *gin.Context) {
-	log.Printf("[%s] New stream connection", c.ClientIP())
-
-	// 获取原生ResponseWriter
-	w := c.Writer
-
-	hj, ok := w.(http.Hijacker)
-	if !ok {
-		log.Printf("[%s] ResponseWriter is not a Hijacker", c.ClientIP())
-		c.AbortWithStatusJSON(http.StatusInternalServerError, v1.ConfigResponse{
-			Success: false,
-			Error:   "Internal Server Error",
-		})
-		return
+	// 自动打开摄像头
+	err := s.svcCtx.Camera.TurnOn()
+	if err != nil {
+		log.Printf("[%s] TurnOn error: %v", c.ClientIP(), err)
 	}
 
-	conn, _, err := hj.Hijack()
+	log.Printf("[%s] New websocket stream connection", c.ClientIP())
+
+	// 升级HTTP连接为WebSocket连接
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true // 允许所有来源的WebSocket连接
+		},
+	}
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("[%s] Hijack error: %v", c.ClientIP(), err)
-		c.AbortWithStatusJSON(http.StatusInternalServerError, v1.ConfigResponse{
-			Success: false,
-			Error:   "Internal Server Error",
-		})
+		log.Printf("[%s] WebSocket upgrade error: %v", c.ClientIP(), err)
 		return
 	}
 	defer conn.Close()
@@ -195,23 +192,6 @@ func (s *VideoHandler) ServeStream(c *gin.Context) {
 	}
 	defer s.svcCtx.Streamer.RemoveClient(clt)
 
-	const boundary = "45c7pIy0cxa4vWtwGuVuAkbzKAQGpRjz9eyhyHTv"
-
-	// 发送响应头
-	respHeader := []byte(
-		"HTTP/1.1 200 OK\r\n" +
-			"Date: " + time.Now().UTC().Format(http.TimeFormat) + "\r\n" +
-			"Content-Type: multipart/x-mixed-replace; boundary=" + boundary + "\r\n" +
-			"Cache-Control: no-cache, no-store, max-age=0, must-revalidate\r\n" +
-			"Pragma: no-cache\r\n" +
-			"\r\n" +
-			"--" + boundary + "\r\n",
-	)
-	if _, err := conn.Write(respHeader); err != nil {
-		log.Printf("[%s] Write header error: %v", c.ClientIP(), err)
-		return
-	}
-
 	// 持续发送帧数据
 	for {
 		buf, ok := <-clt.Ch
@@ -220,33 +200,19 @@ func (s *VideoHandler) ServeStream(c *gin.Context) {
 			return
 		}
 
-		conn.SetDeadline(time.Now().Add(time.Second))
-
-		// 发送帧头
-		if _, err := conn.Write([]byte("Content-Type: image/jpeg\r\n\r\n")); err != nil {
-			log.Printf("[%s] Write frame header error: %v", c.ClientIP(), err)
-			return
-		}
+		conn.SetWriteDeadline(time.Now().Add(time.Second))
 
 		// 发送帧数据
 		if buf == nil {
-			if _, err := conn.Write(s.svcCtx.Streamer.(*video.MJPEGStreamer).Blank); err == nil {
-				conn.Write([]byte("--" + boundary + "--\r\n"))
-			} else {
+			if err := conn.WriteMessage(websocket.BinaryMessage, s.svcCtx.Streamer.(*video.MJPEGStreamer).Blank); err != nil {
 				log.Printf("[%s] Write blank frame error: %v", c.ClientIP(), err)
 			}
 			log.Printf("[%s] Quitting", c.ClientIP())
 			return
 		}
 
-		if _, err := conn.Write(buf); err != nil {
+		if err := conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
 			log.Printf("[%s] Write frame data error: %v", c.ClientIP(), err)
-			return
-		}
-
-		// 发送边界
-		if _, err := conn.Write([]byte("--" + boundary + "\r\n")); err != nil {
-			log.Printf("[%s] Write boundary error: %v", c.ClientIP(), err)
 			return
 		}
 	}
