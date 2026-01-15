@@ -44,6 +44,10 @@ func New(ctx context.Context) *SvcContext {
 	if err := camera.Open(s.Conf.App.VideoPath); err != nil {
 		panic(err)
 	}
+	// 应用配置到摄像头
+	if err := camera.ApplyConfig(s.Conf.App.VideoWidth, s.Conf.App.VideoHeight, uint32(s.Conf.App.VideoFPS)); err != nil {
+		log.Printf("Warning: Failed to apply camera config: %v, using device default", err)
+	}
 	s.Camera = camera
 
 	// 初始化流分发器
@@ -69,6 +73,16 @@ func New(ctx context.Context) *SvcContext {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
+
+			// 压缩帧（未启用，延时太高）
+			// compressedFrame, err := s.Streamer.CompressFrame(frame, 100)
+			// if err != nil {
+			// 	log.Println("Compress frame error:", err)
+			// 	continue
+			// }
+			// s.Streamer.Broadcast(compressedFrame)
+
+			// 直接使用原始JPEG帧，降低延时
 			s.Streamer.Broadcast(frame)
 		}
 	}()

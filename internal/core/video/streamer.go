@@ -18,7 +18,16 @@ type Streamer interface {
 	Wait()
 	Pause()
 	Resume()
+
+	// CompressFrame 对视频帧进行JPEG压缩 - 未启用，延时太高
+	CompressFrame(frame []byte, quality int) ([]byte, error)
 }
+
+// 压缩配置
+const (
+	// JPEG压缩质量 (1-100), 值越低压缩率越高
+	DefaultJPEGQuality = 70
+)
 
 // Client 表示流客户端
 type Client struct {
@@ -139,4 +148,24 @@ func (s *MJPEGStreamer) Resume() {
 	defer s.mu.Unlock()
 	s.paused = false
 	log.Println("Stream resumed after config update")
+}
+
+// CompressFrame 对视频帧进行JPEG压缩
+func (s *MJPEGStreamer) CompressFrame(frame []byte, quality int) ([]byte, error) {
+	// 解码原始JPEG帧
+	img, err := jpeg.Decode(bytes.NewReader(frame))
+	if err != nil {
+		return nil, err
+	}
+
+	// 编码为新的JPEG帧，使用指定的压缩质量
+	var buf bytes.Buffer
+	err = jpeg.Encode(&buf, img, &jpeg.Options{
+		Quality: quality,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }

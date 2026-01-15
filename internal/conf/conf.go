@@ -54,6 +54,14 @@ func New() (*Config, *viper.Viper, string) {
 	v.AddConfigPath("/etc/opskvm/")
 	v.AddConfigPath("./conf")
 
+	// 设置默认值
+	v.SetDefault("opskvm_app.opskvm_video_path", "/dev/video0")
+	v.SetDefault("opskvm_app.opskvm_video_width", 1920)
+	v.SetDefault("opskvm_app.opskvm_video_height", 1080)
+	v.SetDefault("opskvm_app.opskvm_video_fps", 30)
+	v.SetDefault("opskvm_app.opskvm_mode", "debug")
+	v.SetDefault("opskvm_app.opskvm_max_multipart_memory", 10485760)
+
 	// 创建配置变量
 	var config Config
 
@@ -62,22 +70,20 @@ func New() (*Config, *viper.Viper, string) {
 		// 如果配置文件不存在，使用默认配置
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			log.Println("Config file not found, using default configuration")
-
-			// 使用默认配置
-			config = Config{}
-			// 当配置文件不存在时，使用默认的配置文件路径
-			configPath := "./config.yaml"
-			return &config, v, configPath
 		} else {
 			log.Fatalf("Error reading config file: %v", err)
 		}
-	} else {
-		// 配置文件存在，解析它
-		if err := v.Unmarshal(&config); err != nil {
-			log.Fatalf("Unable to decode into struct: %v", err)
-		}
 	}
+
+	// 解析配置，无论配置文件是否存在，都会使用默认值
+	if err := v.Unmarshal(&config); err != nil {
+		log.Fatalf("Unable to decode into struct: %v", err)
+	}
+
 	configPath := v.ConfigFileUsed()
+	if configPath == "" {
+		configPath = "./config.yaml"
+	}
 	log.Println("Initial configuration loaded successfully.")
 
 	return &config, v, configPath

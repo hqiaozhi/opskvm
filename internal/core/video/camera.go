@@ -60,6 +60,24 @@ func (c *V4LCamera) Open(path string) error {
 	return nil
 }
 
+// ApplyConfig 应用配置到摄像头
+func (c *V4LCamera) ApplyConfig(width, height int, fps uint32) error {
+	// c.mu.Lock()
+	// defer c.mu.Unlock()
+
+	if c.dev == nil {
+		return fmt.Errorf("camera device not open")
+	}
+
+	// 只有在配置值大于0时才应用
+	if width > 0 && height > 0 && fps > 0 {
+		_, err := c.UpdateConfig(width, height, fps)
+		return err
+	}
+
+	return nil
+}
+
 func (c *V4LCamera) ListConfigs() ([]v4l.DeviceConfig, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -197,8 +215,12 @@ func (c *V4LCamera) UpdateConfig(width, height int, fps uint32) (v4l.DeviceConfi
 		c.dev = recoverDev
 		c.dev.SetConfig(oldCfg)
 		c.dev.TurnOn()
+		c.isOn = true // 更新摄像头状态
 		return oldCfg, fmt.Errorf("failed to turn on new config: %v (recovered old config)", err)
 	}
+
+	// 更新摄像头状态
+	c.isOn = true
 
 	// 8. 获取实际生效的配置
 	actualCfg, err := newDev.GetConfig()

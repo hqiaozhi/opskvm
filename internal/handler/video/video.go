@@ -10,10 +10,10 @@ import (
 	"opskvm/internal/core/video"
 	"opskvm/internal/svc"
 
-	"github.com/gorilla/websocket"
-	"github.com/korandiz/v4l/fmt/mjpeg"
-
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+
+	"github.com/korandiz/v4l/fmt/mjpeg"
 )
 
 // VideoHandler 视频处理器
