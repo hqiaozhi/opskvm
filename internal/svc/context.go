@@ -73,6 +73,9 @@ func New(ctx context.Context) *SvcContext {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
+			if len(frame) < 5 {
+				continue
+			}
 			// 广播JPEG帧
 			s.Streamer.Broadcast(frame)
 		}

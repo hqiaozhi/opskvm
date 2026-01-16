@@ -140,7 +140,6 @@ func (s *MJPEGStreamer) Broadcast(frame []byte) {
 		s.mu.Unlock()
 		return
 	}
-
 	// 获取当前压缩配置
 	compressEnabled := s.compressEnabled
 	compressQuality := s.compressQuality
