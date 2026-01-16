@@ -16,3 +16,18 @@ type ConfigResponse struct {
 	Config  *video.Config `json:"config,omitempty"`
 	Error   string        `json:"error,omitempty"`
 }
+
+// CompressRequest 压缩控制请求体结构
+type CompressRequest struct {
+	Enabled bool `json:"enabled"`          // 是否开启压缩
+	Quality int  `json:"quality,omitempty"` // 压缩质量 (1-100)
+}
+
+// CompressResponse 压缩控制响应体结构
+type CompressResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Enabled bool   `json:"enabled"`          // 当前压缩状态
+	Quality int    `json:"quality"`          // 当前压缩质量
+	Error   string `json:"error,omitempty"`
+}

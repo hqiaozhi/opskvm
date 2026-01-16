@@ -44,6 +44,8 @@ func RegisterBusinessRoutes(engine *GinEngine) {
 			videoGroup.GET("/configs", videoHandler.GetSupportedConfigsHandler)
 			videoGroup.POST("/on", videoHandler.TurnOnHandler)
 			videoGroup.POST("/off", videoHandler.TurnOffHandler)
+			videoGroup.GET("/compress", videoHandler.GetCompressHandler)
+			videoGroup.POST("/compress", videoHandler.CompressHandler)
 		}
 
 	}

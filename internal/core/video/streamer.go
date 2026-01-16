@@ -37,12 +37,14 @@ type Client struct {
 
 // MJPEGStreamer 是Streamer接口的MJPEG实现
 type MJPEGStreamer struct {
-	mu      sync.Mutex
-	clients []*Client
-	stopped bool
-	paused  bool
-	quit    chan int
-	Blank   []byte
+	mu              sync.Mutex
+	clients         []*Client
+	stopped         bool
+	paused          bool
+	quit            chan int
+	Blank           []byte
+	compressEnabled bool // 压缩开关
+	compressQuality int  // 压缩质量 (1-100)
 }
 
 // NewMJPEGStreamer 创建MJPEGStreamer实例
@@ -52,8 +54,10 @@ func NewMJPEGStreamer(width, height int) *MJPEGStreamer {
 	jpeg.Encode(buf, blankImg, nil)
 
 	return &MJPEGStreamer{
-		quit:  make(chan int, 1),
-		Blank: buf.Bytes(),
+		quit:            make(chan int, 1),
+		Blank:           buf.Bytes(),
+		compressEnabled: false,              // 默认关闭压缩
+		compressQuality: DefaultJPEGQuality, // 默认压缩质量
 	}
 }
 
@@ -95,19 +99,77 @@ func (s *MJPEGStreamer) RemoveClient(clt *Client) {
 	}
 }
 
-func (s *MJPEGStreamer) Broadcast(frame []byte) {
+// EnableCompression 开启压缩
+func (s *MJPEGStreamer) EnableCompression() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.compressEnabled = true
+}
+
+// DisableCompression 关闭压缩
+func (s *MJPEGStreamer) DisableCompression() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.compressEnabled = false
+}
+
+// SetCompressQuality 设置压缩质量
+func (s *MJPEGStreamer) SetCompressQuality(quality int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// 确保质量在有效范围内
+	if quality < 1 {
+		quality = 1
+	} else if quality > 100 {
+		quality = 100
+	}
+	s.compressQuality = quality
+}
+
+// GetCompressConfig 获取压缩配置
+func (s *MJPEGStreamer) GetCompressConfig() (enabled bool, quality int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.compressEnabled, s.compressQuality
+}
+
+func (s *MJPEGStreamer) Broadcast(frame []byte) {
+	s.mu.Lock()
 
 	if s.stopped || s.paused {
+		s.mu.Unlock()
 		return
 	}
 
-	for _, clt := range s.clients {
+	// 获取当前压缩配置
+	compressEnabled := s.compressEnabled
+	compressQuality := s.compressQuality
+
+	// 复制客户端列表，避免在压缩过程中持有锁
+	clients := make([]*Client, len(s.clients))
+	copy(clients, s.clients)
+
+	s.mu.Unlock()
+
+	// 如果开启了压缩，先压缩帧数据
+	var processedFrame []byte
+	if compressEnabled {
+		compressed, err := s.CompressFrame(frame, compressQuality)
+		if err != nil {
+			processedFrame = frame // 压缩失败，使用原始帧
+		} else {
+			processedFrame = compressed
+		}
+	} else {
+		processedFrame = frame // 未开启压缩，使用原始帧
+	}
+
+	// 广播处理后的帧
+	for _, clt := range clients {
 		select {
-		case clt.Ch <- frame:
+		case clt.Ch <- processedFrame:
 		case <-clt.Ch:
-			clt.Ch <- frame
+			clt.Ch <- processedFrame
 		}
 	}
 }

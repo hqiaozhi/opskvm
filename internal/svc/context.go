@@ -73,16 +73,7 @@ func New(ctx context.Context) *SvcContext {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-
-			// 压缩帧（未启用，延时太高）
-			// compressedFrame, err := s.Streamer.CompressFrame(frame, 100)
-			// if err != nil {
-			// 	log.Println("Compress frame error:", err)
-			// 	continue
-			// }
-			// s.Streamer.Broadcast(compressedFrame)
-
-			// 直接使用原始JPEG帧，降低延时
+			// 广播JPEG帧
 			s.Streamer.Broadcast(frame)
 		}
 	}()
