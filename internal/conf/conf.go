@@ -25,6 +25,7 @@ type LoginUser struct {
 }
 
 type AppConfig struct {
+	Name               string        `mapstructure:"opskvm_name"`
 	Host               string        `mapstructure:"opskvm_host"`
 	Port               int           `mapstructure:"opskvm_port"`
 	Mode               string        `mapstructure:"opskvm_mode"`                 // 运行模式（debug/release/test）

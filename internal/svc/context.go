@@ -5,6 +5,7 @@ import (
 	"log"
 	"opskvm/internal/conf"
 	"opskvm/internal/core/files"
+	"opskvm/internal/core/hid/otgm"
 	"opskvm/internal/core/video"
 	"opskvm/internal/utils/jwt"
 	"opskvm/internal/utils/resp"
@@ -20,6 +21,7 @@ type SvcContext struct {
 	Streamer video.Streamer
 	RESP     *resp.Resp
 	JWT      *jwt.JwtService
+	Gadget   otgm.GadgetInterface
 }
 
 func New(ctx context.Context) *SvcContext {
@@ -81,11 +83,6 @@ func New(ctx context.Context) *SvcContext {
 		}
 	}()
 
-	// 启动视频服务中断处理
-	go handleInterrupt(s.Camera, s.Streamer)
-
-	// 初始化USB Gadget服务
-
 	// 响应
 	R := resp.New()
 	s.RESP = R
@@ -94,11 +91,42 @@ func New(ctx context.Context) *SvcContext {
 	jwt := jwt.New(&config.JWT)
 	s.JWT = jwt
 
+	// 初始化USB Gadget服务
+	udcName, err := otgm.FindUDC()
+	if err != nil {
+		panic(err)
+	}
+	s.Gadget = otgm.New(s.Conf.App.Name, udcName)
+	_, err = s.Gadget.InitConfig()
+	if err != nil {
+		panic(err)
+	}
+	// 初始化键盘和鼠标
+	km := otgm.NewKM(s.Gadget)
+	if err := km.AddKeyboard(); err != nil {
+		panic(err)
+	}
+	if err := km.AddMouse(false); err != nil {
+		panic(err)
+	}
+	if err := km.AddMouse(true); err != nil {
+		panic(err)
+	}
+
+	// 启动USB Gadget服务
+	err = s.Gadget.StartUDC()
+	if err != nil {
+		panic(err)
+	}
+
+	// 启动服务中断处理
+	go handleInterrupt(s.Camera, s.Streamer, s.Gadget)
+
 	return s
 }
 
 // handleInterrupt 处理中断信号
-func handleInterrupt(camera video.Camera, streamer video.Streamer) {
+func handleInterrupt(camera video.Camera, streamer video.Streamer, gadget otgm.GadgetInterface) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
 	<-ch
@@ -107,5 +135,6 @@ func handleInterrupt(camera video.Camera, streamer video.Streamer) {
 	streamer.Stop()
 	camera.Close()
 	streamer.Wait()
+	gadget.Remove()
 	os.Exit(0)
 }
