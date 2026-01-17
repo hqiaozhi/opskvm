@@ -24,8 +24,14 @@ func startRun(cmd *cobra.Command, args []string) {
 	// 2. 注册业务路由（核心：解耦路由定义与引擎实现）
 	engine.RegisterRoutes(router.RegisterBusinessRoutes)
 
-	// 3. 启动服务器（阻塞，支持优雅关闭）
-	engine.Run()
+	// 3. 启动服务器（非阻塞）
+	go func() {
+		// 启动服务器（阻塞，支持优雅关闭）
+		engine.Run()
+	}()
+
+	// 4. 等待中断信号处理完成
+	<-svcCtx.Done
 }
 
 func init() {

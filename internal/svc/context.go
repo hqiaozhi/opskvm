@@ -5,6 +5,8 @@ import (
 	"log"
 	"opskvm/internal/conf"
 	"opskvm/internal/core/files"
+	"opskvm/internal/core/hid"
+	"opskvm/internal/core/hid/ch9329"
 	"opskvm/internal/core/hid/otgm"
 	"opskvm/internal/core/video"
 	"opskvm/internal/utils/jwt"
@@ -22,6 +24,8 @@ type SvcContext struct {
 	RESP     *resp.Resp
 	JWT      *jwt.JwtService
 	Gadget   otgm.GadgetInterface
+	KMHID    hid.KMHIDController
+	Done     chan struct{} // 用于通知主程序中断信号已处理
 }
 
 func New(ctx context.Context) *SvcContext {
@@ -101,14 +105,17 @@ func New(ctx context.Context) *SvcContext {
 	if err != nil {
 		panic(err)
 	}
+
 	// 初始化键盘和鼠标
 	km := otgm.NewKM(s.Gadget)
 	if err := km.AddKeyboard(); err != nil {
 		panic(err)
 	}
+	// 鼠标相对模式
 	if err := km.AddMouse(false); err != nil {
 		panic(err)
 	}
+	// 鼠标绝对模式
 	if err := km.AddMouse(true); err != nil {
 		panic(err)
 	}
@@ -119,22 +126,55 @@ func New(ctx context.Context) *SvcContext {
 		panic(err)
 	}
 
+	// 创建一个通道，用于通知主程序中断信号已处理
+	done := make(chan struct{})
+
 	// 启动服务中断处理
-	go handleInterrupt(s.Camera, s.Streamer, s.Gadget)
+	go handleInterrupt(s.Camera, s.Streamer, s.Gadget, done)
+
+	// 获取键盘和鼠标控制器
+	switch s.Conf.App.KMhidMode {
+	case "otg":
+		s.KMHID = otgm.NewOTGKMHIDControl()
+		if err := s.KMHID.Open(); err != nil {
+			log.Printf("Failed to open OTG HID: %v", err)
+			// 可以选择panic或其他错误处理方式
+		}
+	case "ch9329":
+		s.KMHID = ch9329.NewCH9329()
+		s.KMHID.SetAbsoluteMouse(true)
+		if err := s.KMHID.Open(); err != nil {
+			log.Printf("Failed to open CH9329: %v", err)
+		}
+	}
+
+	// 将通道存储在上下文中，以便主程序等待
+	s.Done = done
 
 	return s
 }
 
 // handleInterrupt 处理中断信号
-func handleInterrupt(camera video.Camera, streamer video.Streamer, gadget otgm.GadgetInterface) {
+func handleInterrupt(camera video.Camera, streamer video.Streamer, gadget otgm.GadgetInterface, done chan struct{}) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
 	<-ch
 
 	log.Println("Stopping server...")
+	// 移除旧的Gadget目录
+	log.Println("Removing old Gadget directory")
+	log.Println("======================================")
+	if err := gadget.Remove(); err != nil {
+		log.Printf("Error removing Gadget: %v", err)
+	}
+	// 停止流分发器
 	streamer.Stop()
+	// 关闭摄像头
 	camera.Close()
+	// 等待流分发器停止
 	streamer.Wait()
-	gadget.Remove()
-	os.Exit(0)
+
+	// 所有清理操作完成后，关闭通道通知主程序
+	log.Println("All cleanup operations completed, exiting...")
+	close(done)
 }

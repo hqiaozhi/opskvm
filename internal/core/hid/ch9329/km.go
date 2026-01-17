@@ -153,24 +153,6 @@ const (
 	MouseMiddle = 0x04
 )
 
-// HIDDevice 定义HID设备接口
-type HIDDevice interface {
-	Open(portName string, baudRate int) error
-	Close() error
-	SendKeyboardReport(modifier byte, keys []byte) error
-	SendMouseReport(buttons byte, dx, dy, wheel int8) error
-	PressKey(key byte) error
-	ReleaseKey(key byte) error
-	PressKeyWithModifier(modifier byte, key byte) error
-	PressKeyWithModifiers(modifier byte, keys ...byte) error
-	ClearScreen() error
-	Reboot() error
-	TypeString(s string) error
-	MoveMouse(dx, dy int8) error
-	ClickMouse(button byte) error
-	ScrollMouse(wheel int8) error
-}
-
 // CH9329Device 实现HIDDevice接口
 type CH9329Device struct {
 	port     serial.Port
@@ -185,8 +167,9 @@ func NewCH9329() *CH9329Device {
 }
 
 // SetAbsoluteMouse 设置鼠标是否使用绝对模式
-func (d *CH9329Device) SetAbsoluteMouse(absolute bool) {
+func (d *CH9329Device) SetAbsoluteMouse(absolute bool) error {
 	d.absolute = absolute
+	return nil
 }
 
 // IsAbsoluteMouse 检查鼠标是否使用绝对模式
@@ -203,8 +186,29 @@ func (d *CH9329Device) calculateChecksum(data []byte) byte {
 	return byte(sum % 256)
 }
 
-// Open 打开串口连接
-func (d *CH9329Device) Open(portName string, baudRate int) error {
+// Open 打开串口连接（实现hid.KMHIDController接口）
+func (d *CH9329Device) Open() error {
+	// 默认参数，实际使用时应该从配置中获取
+	portName := "/dev/ttyUSB0"
+	baudRate := 9600
+
+	mode := &serial.Mode{
+		BaudRate: baudRate,
+		DataBits: 8,
+		Parity:   serial.NoParity,
+		StopBits: serial.OneStopBit,
+	}
+
+	port, err := serial.Open(portName, mode)
+	if err != nil {
+		return err
+	}
+	d.port = port
+	return nil
+}
+
+// OpenWithParams 打开串口连接（带参数的版本，供内部使用）
+func (d *CH9329Device) OpenWithParams(portName string, baudRate int) error {
 	mode := &serial.Mode{
 		BaudRate: baudRate,
 		DataBits: 8,

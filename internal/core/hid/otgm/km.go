@@ -67,12 +67,6 @@ func (k *KM) addHID(desc, name string, hid HID) error {
 		return err
 	}
 
-	// 默认开启唤醒模式
-	err = k.Write(filepath.Join(funcPath, "wakeup_on_write"), "1")
-	if err != nil {
-		return err
-	}
-
 	err = k.Write(filepath.Join(funcPath, "protocol"), strconv.Itoa(hid.Protocol))
 	if err != nil {
 		return err

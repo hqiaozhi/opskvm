@@ -35,13 +35,6 @@ func (g *Gadget) addHID(desc string, start bool, remoteWakeup bool, hid Hid) err
 		return err
 	}
 
-	if remoteWakeup {
-		err = g.write(filepath.Join(funcPath, "wakeup_on_write"), "1", true)
-		if err != nil {
-			return err
-		}
-	}
-
 	err = g.write(filepath.Join(funcPath, "protocol"), strconv.Itoa(hid.Protocol), false)
 	if err != nil {
 		return err

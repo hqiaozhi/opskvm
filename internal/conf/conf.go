@@ -33,6 +33,7 @@ type AppConfig struct {
 	VideoWidth         int           `mapstructure:"opskvm_video_width"`          // 视频宽度（默认1920）
 	VideoHeight        int           `mapstructure:"opskvm_video_height"`         // 视频高度（默认1080）
 	VideoFPS           int           `mapstructure:"opskvm_video_fps"`            // 视频帧率（默认30）
+	KMhidMode          string        `mapstructure:"opskvm_kmhid_mode"`           // 键盘鼠标模式（otg/ch9329）
 	ReadTimeout        time.Duration `mapstructure:"opskvm_read_timeout"`         // 读取超时
 	WriteTimeout       time.Duration `mapstructure:"opskvm_write_timeout"`        // 写入超时
 	IdleTimeout        time.Duration `mapstructure:"opskvm_idle_timeout"`         // 空闲超时

@@ -57,13 +57,23 @@ func (g *Gadget) Mkdir(path string) error {
 
 // Write 写入文件
 func (g *Gadget) Write(path string, value string) error {
-	// 直接写入文件，无需先检查是否存在
-	// 使用 0644 权限，确保文件可读写
+	// 检查文件是否存在
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// 如果文件不存在，直接返回nil，不报错
+		return nil
+	}
+	// 写入文件
 	return os.WriteFile(path, []byte(value), 0644)
 }
 
 // WriteBytes 写入字节数据
 func (g *Gadget) WriteBytes(path string, data []byte) error {
+	// 检查文件是否存在
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// 如果文件不存在，直接返回nil，不报错
+		return nil
+	}
+	// 写入文件
 	return os.WriteFile(path, data, 0644)
 }
 
@@ -74,7 +84,8 @@ func (g *Gadget) Symlink(src, dest string) error {
 
 // Rmdir 删除目录
 func (g *Gadget) Rmdir(path string) error {
-	return os.Remove(path)
+	// 使用 RemoveAll 删除目录及其所有内容
+	return os.RemoveAll(path)
 }
 
 // Unlink 删除文件或符号链接
@@ -88,6 +99,13 @@ func (g *Gadget) Unlink(path string) error {
 
 // InitConfig 初始化配置
 func (g *Gadget) InitConfig() (string, error) {
+
+	// 首先确保旧的Gadget目录已经被完全删除，使用Remove方法顺序删除
+	if err := g.Remove(); err != nil {
+		log.Printf("Warning: Failed to remove old Gadget directory: %v, trying to create new one anyway", err)
+		os.Exit(1)
+	}
+
 	type config struct {
 		VendorID      string
 		ProductID     string
@@ -118,7 +136,7 @@ func (g *Gadget) InitConfig() (string, error) {
 	}
 	log.Printf("configfs is mounted at %s", configfsPath)
 
-	// 首先创建Gadget根目录
+	// 然后创建Gadget根目录
 	log.Printf("Creating Gadget root directory: %s", g.gadgetPath)
 	err := g.Mkdir(g.gadgetPath)
 	if err != nil {
@@ -267,8 +285,17 @@ func (g *Gadget) StartUDC() error {
 }
 
 func (g *Gadget) CloseUDC() error {
+	// 先打开文件看看是否有内容，如果为空则跳过
+	content, err := os.ReadFile(filepath.Join(g.gadgetPath, "UDC"))
+	if err != nil {
+		return fmt.Errorf("读取UDC文件失败：%w", err)
+	}
+	if len(content) < 2 {
+		return nil
+	}
+
 	// 关闭UDC设备
-	err := g.Write(filepath.Join(g.gadgetPath, "UDC"), "\n")
+	err = g.Write(filepath.Join(g.gadgetPath, "UDC"), "\n")
 	if err != nil {
 		return err
 	}
@@ -277,11 +304,23 @@ func (g *Gadget) CloseUDC() error {
 }
 
 func (g *Gadget) Remove() error {
+	log.Printf("\n")
+	log.Printf("Removing old Gadget directory")
+	log.Printf("======================================\n")
+
+	// 判断目录是否存在，不存在则跳过
+	if _, err := os.Stat(g.gadgetPath); os.IsNotExist(err) {
+		log.Printf("Removing Gadget root directory successfully")
+		log.Printf("======================================\n\n")
+		return nil
+	}
+
 	// 关闭UDC设备
 	err := g.CloseUDC()
 	if err != nil {
 		return err
 	}
+	log.Printf("UDC device closed successfully")
 
 	// 删除功能符号链接
 	profilePath := filepath.Join(g.gadgetPath, "configs/c.1")
@@ -293,6 +332,7 @@ func (g *Gadget) Remove() error {
 			}
 		}
 	}
+	log.Printf("Removing function symlinks successfully")
 
 	// 删除配置字符串目录
 	g.Rmdir(filepath.Join(profilePath, "strings/0x409"))
@@ -310,12 +350,16 @@ func (g *Gadget) Remove() error {
 			}
 		}
 	}
+	log.Printf("Removing function directories successfully")
 
 	// 删除设备字符串目录
 	g.Rmdir(filepath.Join(g.gadgetPath, "strings/0x409"))
+	log.Printf("Removing strings strings directory successfully")
 
 	// 删除Gadget目录
 	g.Rmdir(g.gadgetPath)
+	log.Printf("Removing Gadget root directory successfully")
+	log.Printf("======================================\n\n")
 
 	return nil
 }

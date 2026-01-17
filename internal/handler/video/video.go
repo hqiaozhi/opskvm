@@ -1,6 +1,7 @@
 package video
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -230,6 +231,71 @@ func (s *VideoHandler) CompressHandler(c *gin.Context) {
 	})
 }
 
+// WSMessageType WebSocket消息类型
+type WSMessageType int
+
+const (
+	WSMessageTypeVideo     WSMessageType = 0 // 视频流数据
+	WSMessageTypeKeyboard  WSMessageType = 1 // 键盘事件
+	WSMessageTypeMouse     WSMessageType = 2 // 鼠标事件
+	WSMessageTypeMouseMode WSMessageType = 3 // 鼠标模式切换
+)
+
+// ASCIIToHIDMap ASCII码到HID扫描码的映射表
+var ASCIIToHIDMap = map[byte]byte{
+	// 字母
+	'a': 0x04, 'b': 0x05, 'c': 0x06, 'd': 0x07, 'e': 0x08, 'f': 0x09, 'g': 0x0A,
+	'h': 0x0B, 'i': 0x0C, 'j': 0x0D, 'k': 0x0E, 'l': 0x0F, 'm': 0x10, 'n': 0x11,
+	'o': 0x12, 'p': 0x13, 'q': 0x14, 'r': 0x15, 's': 0x16, 't': 0x17, 'u': 0x18,
+	'v': 0x19, 'w': 0x1A, 'x': 0x1B, 'y': 0x1C, 'z': 0x1D,
+	'A': 0x04, 'B': 0x05, 'C': 0x06, 'D': 0x07, 'E': 0x08, 'F': 0x09, 'G': 0x0A,
+	'H': 0x0B, 'I': 0x0C, 'J': 0x0D, 'K': 0x0E, 'L': 0x0F, 'M': 0x10, 'N': 0x11,
+	'O': 0x12, 'P': 0x13, 'Q': 0x14, 'R': 0x15, 'S': 0x16, 'T': 0x17, 'U': 0x18,
+	'V': 0x19, 'W': 0x1A, 'X': 0x1B, 'Y': 0x1C, 'Z': 0x1D,
+	// 数字
+	'1': 0x1E, '2': 0x1F, '3': 0x20, '4': 0x21, '5': 0x22, '6': 0x23, '7': 0x24,
+	'8': 0x25, '9': 0x26, '0': 0x27,
+	// 特殊字符
+	'-': 0x2D, '=': 0x2E, '[': 0x2F, ']': 0x30, '\\': 0x31, ';': 0x33, '\'': 0x34,
+	'`': 0x35, ',': 0x36, '.': 0x37, '/': 0x38,
+	// 功能键
+	' ': 0x2C,
+}
+
+// KeyCodeToHIDMap 前端按键码到HID扫描码的映射表（用于直接按键码映射）
+var KeyCodeToHIDMap = map[byte]byte{
+	// HID扫描码直接映射
+	0x04: 0x04, 0x05: 0x05, 0x06: 0x06, 0x07: 0x07, 0x08: 0x08, 0x09: 0x09, 0x0A: 0x0A,
+	0x0B: 0x0B, 0x0C: 0x0C, 0x0D: 0x0D, 0x0E: 0x0E, 0x0F: 0x0F, 0x10: 0x10, 0x11: 0x11,
+	0x12: 0x12, 0x13: 0x13, 0x14: 0x14, 0x15: 0x15, 0x16: 0x16, 0x17: 0x17, 0x18: 0x18,
+	0x19: 0x19, 0x1A: 0x1A, 0x1B: 0x1B, 0x1C: 0x1C, 0x1D: 0x1D,
+}
+
+// WSMessage WebSocket消息结构
+type WSMessage struct {
+	Type WSMessageType `json:"type"` // 消息类型
+	Data interface{}   `json:"data"` // 消息数据
+}
+
+// KeyboardData 键盘事件数据
+type KeyboardData struct {
+	Modifier byte   `json:"modifier"` // 修饰键
+	Keys     []byte `json:"keys"`     // 按键列表
+}
+
+// MouseData 鼠标事件数据
+type MouseData struct {
+	Buttons byte `json:"buttons"` // 鼠标按键状态
+	DX      int8 `json:"dx"`      // X方向增量
+	DY      int8 `json:"dy"`      // Y方向增量
+	Wheel   int8 `json:"wheel"`   // 滚轮增量
+}
+
+// MouseModeData 鼠标模式切换数据
+type MouseModeData struct {
+	Absolute bool `json:"absolute"` // 是否为绝对模式
+}
+
 // ServeStream WebSocket流处理
 func (s *VideoHandler) ServeStream(c *gin.Context) {
 	// 自动打开摄像头
@@ -260,6 +326,20 @@ func (s *VideoHandler) ServeStream(c *gin.Context) {
 	}
 	defer s.svcCtx.Streamer.RemoveClient(clt)
 
+	// 启动消息接收协程
+	go func() {
+		for {
+			_, message, err := conn.ReadMessage()
+			if err != nil {
+				log.Printf("[%s] Read message error: %v", c.ClientIP(), err)
+				return
+			}
+
+			// 处理接收到的消息
+			s.handleWSMessage(message)
+		}
+	}()
+
 	// 持续发送帧数据
 	for {
 		buf, ok := <-clt.Ch
@@ -283,5 +363,71 @@ func (s *VideoHandler) ServeStream(c *gin.Context) {
 			log.Printf("[%s] Write frame data error: %v", c.ClientIP(), err)
 			return
 		}
+	}
+}
+
+// handleWSMessage 处理WebSocket消息
+func (s *VideoHandler) handleWSMessage(message []byte) {
+	// 解析JSON消息
+	var wsMsg WSMessage
+	if err := json.Unmarshal(message, &wsMsg); err != nil {
+		log.Printf("Parse WebSocket message error: %v", err)
+		return
+	}
+
+	log.Printf("Received WebSocket message, type: %d", wsMsg.Type)
+
+	// 根据消息类型处理
+	switch wsMsg.Type {
+	case WSMessageTypeKeyboard:
+		// 处理键盘事件
+		data, ok := wsMsg.Data.(map[string]interface{})
+		if !ok {
+			log.Printf("Invalid keyboard message data format")
+			return
+		}
+
+		modifier := byte(data["modifier"].(float64))
+		keys := make([]byte, 0)
+		if keysData, ok := data["keys"].([]interface{}); ok {
+			for _, k := range keysData {
+				keys = append(keys, byte(k.(float64)))
+			}
+		}
+
+		log.Printf("Keyboard event: modifier=0x%02x, keys=%v", modifier, keys)
+
+		// 直接使用接收到的按键码发送报告
+		s.svcCtx.KMHID.SendKeyboardReport(modifier, keys)
+
+	case WSMessageTypeMouse:
+		// 处理鼠标事件
+		data, ok := wsMsg.Data.(map[string]interface{})
+		if !ok {
+			log.Printf("Invalid mouse message data format")
+			return
+		}
+
+		buttons := byte(data["buttons"].(float64))
+		dx := int8(data["dx"].(float64))
+		dy := int8(data["dy"].(float64))
+		wheel := int8(data["wheel"].(float64))
+
+		log.Printf("Mouse event: buttons=0x%02x, dx=%d, dy=%d, wheel=%d", buttons, dx, dy, wheel)
+		s.svcCtx.KMHID.SendMouseReport(buttons, dx, dy, wheel)
+
+	case WSMessageTypeMouseMode:
+		// 处理鼠标模式切换
+		data, ok := wsMsg.Data.(map[string]interface{})
+		if !ok {
+			log.Printf("Invalid mouse mode message data format")
+			return
+		}
+
+		absolute := data["absolute"].(bool)
+		log.Printf("Mouse mode change: absolute=%v", absolute)
+		s.svcCtx.KMHID.SetAbsoluteMouse(absolute)
+	default:
+		log.Printf("Unknown WebSocket message type: %d", wsMsg.Type)
 	}
 }

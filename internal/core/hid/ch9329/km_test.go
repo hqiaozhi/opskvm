@@ -31,7 +31,7 @@ func Test_KM(t *testing.T) {
 	// 打开第一个可用串口（实际使用时请根据需要选择正确的串口）
 	portName := ports[0]
 	fmt.Printf("\nOpening port: %s\n", portName)
-	if err := hidDev.Open(portName, 9600); err != nil {
+	if err := hidDev.Open(); err != nil {
 		log.Fatal(err)
 	}
 
