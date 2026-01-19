@@ -2,15 +2,6 @@ package ch9329
 
 import (
 	"time"
-
-	"go.bug.st/serial"
-)
-
-// CH9329 命令类型
-const (
-	CmdTypeKeyboard      = 0x02
-	CmdTypeMouseAbsolute = 0x04
-	CmdTypeMouseRelative = 0x05
 )
 
 // CH9329 键盘按键编码（部分常用键）
@@ -146,171 +137,45 @@ const (
 	ModifierRightGUI   = 0x80
 )
 
-// CH9329 鼠标按键
-const (
-	MouseLeft   = 0x01
-	MouseRight  = 0x02
-	MouseMiddle = 0x04
-)
-
-// CH9329Device 实现HIDDevice接口
-type CH9329Device struct {
-	port     serial.Port
-	absolute bool
-}
-
-// NewCH9329Device 创建新的CH9329设备实例
-func NewCH9329() *CH9329Device {
-	return &CH9329Device{
-		absolute: false, // 默认使用相对鼠标模式
-	}
-}
-
-// SetAbsoluteMouse 设置鼠标是否使用绝对模式
-func (d *CH9329Device) SetAbsoluteMouse(absolute bool) error {
-	d.absolute = absolute
-	return nil
-}
-
-// IsAbsoluteMouse 检查鼠标是否使用绝对模式
-func (d *CH9329Device) IsAbsoluteMouse() bool {
-	return d.absolute
-}
-
-// calculateChecksum 计算校验和
-func (d *CH9329Device) calculateChecksum(data []byte) byte {
-	var sum int
-	for _, b := range data {
-		sum += int(b)
-	}
-	return byte(sum % 256)
-}
-
-// Open 打开串口连接（实现hid.KMHIDController接口）
-func (d *CH9329Device) Open() error {
-	// 默认参数，实际使用时应该从配置中获取
-	portName := "/dev/ttyUSB0"
-	baudRate := 9600
-
-	mode := &serial.Mode{
-		BaudRate: baudRate,
-		DataBits: 8,
-		Parity:   serial.NoParity,
-		StopBits: serial.OneStopBit,
-	}
-
-	port, err := serial.Open(portName, mode)
-	if err != nil {
-		return err
-	}
-	d.port = port
-	return nil
-}
-
-// OpenWithParams 打开串口连接（带参数的版本，供内部使用）
-func (d *CH9329Device) OpenWithParams(portName string, baudRate int) error {
-	mode := &serial.Mode{
-		BaudRate: baudRate,
-		DataBits: 8,
-		Parity:   serial.NoParity,
-		StopBits: serial.OneStopBit,
-	}
-
-	port, err := serial.Open(portName, mode)
-	if err != nil {
-		return err
-	}
-	d.port = port
-	return nil
-}
-
-// Close 关闭串口连接
-func (d *CH9329Device) Close() error {
-	if d.port != nil {
-		return d.port.Close()
-	}
-	return nil
-}
-
-// SendKeyboardReport 发送键盘HID报告
+// SendKeyboardReport 发送键盘HID报告，与Python版本完全一致
 func (d *CH9329Device) SendKeyboardReport(modifier byte, keys []byte) error {
-	// CH9329 键盘命令格式（参考One-KVM）：
-	// 头部(2字节) + [0, 0x02, 0x08, modifier, 0, key1, key2, key3, key4, key5, key6] + 校验和(1字节)
-	cmd := make([]byte, 14)
-	cmd[0] = 0x57            // 起始字节1
-	cmd[1] = 0xAB            // 起始字节2
-	cmd[2] = 0x00            // 保留
-	cmd[3] = CmdTypeKeyboard // 命令类型
-	cmd[4] = 0x08            // 数据长度
-	cmd[5] = modifier        // 修饰键
-	cmd[6] = 0x00            // 保留
-
-	// 填充按键码（最多6个按键）
-	for i := 0; i < 6; i++ {
-		if i < len(keys) {
-			cmd[7+i] = keys[i]
-		} else {
-			cmd[7+i] = 0x00
-		}
+	// CH9329 键盘命令格式，与Python完全一致：
+	// [0, 0x02, 0x08, modifier, 0, key1, key2, key3, key4, key5, key6]
+	cmd := []byte{
+		0x00,            // 保留字节
+		CmdTypeKeyboard, // 命令类型：键盘
+		0x08,            // 数据长度
+		modifier,        // 修饰键
+		0x00,            // 保留字节
+		0x00,            // 按键1
+		0x00,            // 按键2
+		0x00,            // 按键3
+		0x00,            // 按键4
+		0x00,            // 按键5
+		0x00,            // 按键6
 	}
 
-	// 计算校验和
-	checksum := d.calculateChecksum(cmd[:13])
-	cmd[13] = checksum
+	// 填充按键码（最多6个按键），与Python完全一致
+	for i := 0; i < 6 && i < len(keys); i++ {
+		cmd[5+i] = keys[i]
+	}
 
-	_, err := d.port.Write(cmd)
-	return err
+	// 发送命令
+	return d.sendCommand(cmd)
 }
 
-// SendMouseReport 发送鼠标HID报告
-func (d *CH9329Device) SendMouseReport(buttons byte, dx, dy, wheel int8) error {
-	var cmd []byte
+// SetLEDs 设置LED状态，与Python版本一致
+func (d *CH9329Device) SetLEDs(ledByte byte) {
+	d.ledState = ledByte
+}
 
-	if d.absolute {
-		// 绝对鼠标模式（参考One-KVM）：
-		// 头部(2字节) + [0, 0x04, 0x07, 0x02, buttons, x_low, x_high, y_low, y_high, wheel] + 校验和(1字节)
-		// 注意：这里的dx和dy被当作绝对坐标值处理
-		x := uint16(dx)
-		y := uint16(dy)
-
-		cmd = make([]byte, 14)
-		cmd[0] = 0x57                 // 起始字节1
-		cmd[1] = 0xAB                 // 起始字节2
-		cmd[2] = 0x00                 // 保留
-		cmd[3] = CmdTypeMouseAbsolute // 命令类型
-		cmd[4] = 0x07                 // 数据长度
-		cmd[5] = 0x02                 // 绝对模式标识
-		cmd[6] = buttons              // 按键状态
-		cmd[7] = byte(x & 0xFF)       // X坐标低字节
-		cmd[8] = byte(x >> 8)         // X坐标高字节
-		cmd[9] = byte(y & 0xFF)       // Y坐标低字节
-		cmd[10] = byte(y >> 8)        // Y坐标高字节
-		cmd[11] = byte(wheel)         // 滚轮
-		cmd[12] = 0x00                // 保留
-
-	} else {
-		// 相对鼠标模式（参考One-KVM）：
-		// 头部(2字节) + [0, 0x05, 0x05, 0x01, buttons, dx, dy, wheel] + 校验和(1字节)
-		cmd = make([]byte, 12)
-		cmd[0] = 0x57                 // 起始字节1
-		cmd[1] = 0xAB                 // 起始字节2
-		cmd[2] = 0x00                 // 保留
-		cmd[3] = CmdTypeMouseRelative // 命令类型
-		cmd[4] = 0x05                 // 数据长度
-		cmd[5] = 0x01                 // 相对模式标识
-		cmd[6] = buttons              // 按键状态
-		cmd[7] = byte(dx)             // X增量
-		cmd[8] = byte(dy)             // Y增量
-		cmd[9] = byte(wheel)          // 滚轮
-		cmd[10] = 0x00                // 保留
+// LEDStatus LED状态
+func (d *CH9329Device) LEDStatus() map[string]bool {
+	return map[string]bool{
+		"num":    (d.ledState & 1) != 0,
+		"caps":   ((d.ledState >> 1) & 1) != 0,
+		"scroll": ((d.ledState >> 2) & 1) != 0,
 	}
-
-	// 计算校验和
-	checksum := d.calculateChecksum(cmd[:len(cmd)-1])
-	cmd[len(cmd)-1] = checksum
-
-	_, err := d.port.Write(cmd)
-	return err
 }
 
 // PressKey 按下单个按键
@@ -373,6 +238,41 @@ func (d *CH9329Device) Reboot() error {
 	return d.PressKeyWithModifier(modifier, KeyDelete)
 }
 
+// ProcessKey 处理键盘按键事件，与Python版本一致
+func (d *CH9329Device) ProcessKey(key byte, isModifier bool, state bool) error {
+	if state {
+		if isModifier {
+			d.modifiers |= key
+		} else if len(d.activeKeys) < 6 {
+			// 检查按键是否已在活动列表中
+			found := false
+			for _, k := range d.activeKeys {
+				if k == key {
+					found = true
+					break
+				}
+			}
+			if !found {
+				d.activeKeys = append(d.activeKeys, key)
+			}
+		}
+	} else {
+		if isModifier {
+			d.modifiers &= ^key
+		} else {
+			// 从活动列表中移除按键
+			for i, k := range d.activeKeys {
+				if k == key {
+					d.activeKeys = append(d.activeKeys[:i], d.activeKeys[i+1:]...)
+					break
+				}
+			}
+		}
+	}
+	// 发送键盘报告
+	return d.SendKeyboardReport(d.modifiers, d.activeKeys)
+}
+
 // TypeString 输入字符串（仅支持字母、数字和部分符号）
 func (d *CH9329Device) TypeString(s string) error {
 	for _, c := range s {
@@ -380,6 +280,7 @@ func (d *CH9329Device) TypeString(s string) error {
 
 		// 转换字符为按键码
 		switch c {
+		// 半角英文字母
 		case 'a', 'A':
 			key = KeyA
 		case 'b', 'B':
@@ -432,6 +333,7 @@ func (d *CH9329Device) TypeString(s string) error {
 			key = KeyY
 		case 'z', 'Z':
 			key = KeyZ
+		// 半角数字
 		case '1':
 			key = Key1
 		case '2':
@@ -452,6 +354,7 @@ func (d *CH9329Device) TypeString(s string) error {
 			key = Key9
 		case '0':
 			key = Key0
+		// 半角符号
 		case '-':
 			key = KeyMinus
 		case '=':
@@ -516,8 +419,150 @@ func (d *CH9329Device) TypeString(s string) error {
 			key = KeyDot
 		case '?':
 			key = KeySlash
+		// 全角字符（转换为对应的半角字符处理）
+		case 'ａ', 'Ａ':
+			key = KeyA
+		case 'ｂ', 'Ｂ':
+			key = KeyB
+		case 'ｃ', 'Ｃ':
+			key = KeyC
+		case 'ｄ', 'Ｄ':
+			key = KeyD
+		case 'ｅ', 'Ｅ':
+			key = KeyE
+		case 'ｆ', 'Ｆ':
+			key = KeyF
+		case 'ｇ', 'Ｇ':
+			key = KeyG
+		case 'ｈ', 'Ｈ':
+			key = KeyH
+		case 'ｉ', 'Ｉ':
+			key = KeyI
+		case 'ｊ', 'Ｊ':
+			key = KeyJ
+		case 'ｋ', 'Ｋ':
+			key = KeyK
+		case 'ｌ', 'Ｌ':
+			key = KeyL
+		case 'ｍ', 'Ｍ':
+			key = KeyM
+		case 'ｎ', 'Ｎ':
+			key = KeyN
+		case 'ｏ', 'Ｏ':
+			key = KeyO
+		case 'ｐ', 'Ｐ':
+			key = KeyP
+		case 'ｑ', 'Ｑ':
+			key = KeyQ
+		case 'ｒ', 'Ｒ':
+			key = KeyR
+		case 'ｓ', 'Ｓ':
+			key = KeyS
+		case 'ｔ', 'Ｔ':
+			key = KeyT
+		case 'ｕ', 'Ｕ':
+			key = KeyU
+		case 'ｖ', 'Ｖ':
+			key = KeyV
+		case 'ｗ', 'Ｗ':
+			key = KeyW
+		case 'ｘ', 'Ｘ':
+			key = KeyX
+		case 'ｙ', 'Ｙ':
+			key = KeyY
+		case 'ｚ', 'Ｚ':
+			key = KeyZ
+		case '１':
+			key = Key1
+		case '２':
+			key = Key2
+		case '３':
+			key = Key3
+		case '４':
+			key = Key4
+		case '５':
+			key = Key5
+		case '６':
+			key = Key6
+		case '７':
+			key = Key7
+		case '８':
+			key = Key8
+		case '９':
+			key = Key9
+		case '０':
+			key = Key0
+		case '－':
+			key = KeyMinus
+		case '＝':
+			key = KeyEqual
+		case '［':
+			key = KeyLeftBrace
+		case '］':
+			key = KeyRightBrace
+		case '＼':
+			key = KeyBackslash
+		case '；':
+			key = KeySemicolon
+		case '＇':
+			key = KeyApostrophe
+		case '｀':
+			key = KeyGrave
+		case '，':
+			key = KeyComma
+		case '．':
+			key = KeyDot
+		case '／':
+			key = KeySlash
+		case '！':
+			key = Key1
+		case '＠':
+			key = Key2
+		case '＃':
+			key = Key3
+		case '＄':
+			key = Key4
+		case '％':
+			key = Key5
+		case '＾':
+			key = Key6
+		case '＆':
+			key = Key7
+		case '＊':
+			key = Key8
+		case '（':
+			key = Key9
+		case '）':
+			key = Key0
+		case '＿':
+			key = KeyMinus
+		case '＋':
+			key = KeyEqual
+		case '｛':
+			key = KeyLeftBrace
+		case '｝':
+			key = KeyRightBrace
+		case '｜':
+			key = KeyBackslash
+		case '：':
+			key = KeySemicolon
+		case '＂':
+			key = KeyApostrophe
+		case '～':
+			key = KeyGrave
+		case '＜':
+			key = KeyComma
+		case '＞':
+			key = KeyDot
+		case '？':
+			key = KeySlash
+		case '　':
+			key = KeySpace
+		// 控制字符
 		case ' ':
 			key = KeySpace
+		case '\t':
+			key = KeyTab
 		case '\n':
 			key = KeyEnter
 		default:
@@ -527,12 +572,18 @@ func (d *CH9329Device) TypeString(s string) error {
 
 		// 按下并释放按键
 		modifier := byte(0x00)
-		if c >= 'A' && c <= 'Z' {
+		// 半角或全角大写字母需要Shift键
+		if (c >= 'A' && c <= 'Z') || (c >= 'Ａ' && c <= 'Ｚ') {
 			modifier = ModifierLeftShift
 		}
-		// 需要Shift键的符号
+		// 需要Shift键的半角符号
 		switch c {
 		case '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '{', '}', '|', ':', '"', '~', '<', '>', '?':
+			modifier = ModifierLeftShift
+		}
+		// 需要Shift键的全角符号
+		switch c {
+		case '！', '＠', '＃', '＄', '％', '＾', '＆', '＊', '（', '）', '＿', '＋', '｛', '｝', '｜', '：', '＂', '～', '＜', '＞', '？':
 			modifier = ModifierLeftShift
 		}
 
@@ -550,30 +601,4 @@ func (d *CH9329Device) TypeString(s string) error {
 	}
 
 	return nil
-}
-
-// MoveMouse 移动鼠标
-func (d *CH9329Device) MoveMouse(dx, dy int8) error {
-	return d.SendMouseReport(0x00, dx, dy, 0)
-}
-
-// ClickMouse 点击鼠标
-func (d *CH9329Device) ClickMouse(button byte) error {
-	// 按下
-	if err := d.SendMouseReport(button, 0, 0, 0); err != nil {
-		return err
-	}
-	time.Sleep(50 * time.Millisecond)
-
-	// 释放
-	if err := d.SendMouseReport(0x00, 0, 0, 0); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ScrollMouse 滚动鼠标
-func (d *CH9329Device) ScrollMouse(wheel int8) error {
-	return d.SendMouseReport(0x00, 0, 0, wheel)
 }

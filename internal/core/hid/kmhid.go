@@ -14,8 +14,8 @@ type KMHIDController interface {
 	PressKeyWithModifiers(modifier byte, keys ...byte) error
 
 	// 鼠标操作
-	SendMouseReport(buttons byte, dx, dy, wheel int8) error
-	MoveMouse(dx, dy int8) error
+	SendMouseReport(buttons byte, dx, dy int, wheel int8) error
+	MoveMouse(dx, dy int) error
 	ClickMouse(button byte) error
 	ScrollMouse(wheel int8) error
 

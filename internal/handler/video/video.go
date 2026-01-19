@@ -375,7 +375,10 @@ func (s *VideoHandler) handleWSMessage(message []byte) {
 		return
 	}
 
-	log.Printf("Received WebSocket message, type: %d", wsMsg.Type)
+	// 只在关键消息类型（如模式切换）时记录完整日志，减少重复日志
+	if wsMsg.Type == WSMessageTypeMouseMode {
+		log.Printf("Received WebSocket message, type: %d", wsMsg.Type)
+	}
 
 	// 根据消息类型处理
 	switch wsMsg.Type {
@@ -387,15 +390,32 @@ func (s *VideoHandler) handleWSMessage(message []byte) {
 			return
 		}
 
-		modifier := byte(data["modifier"].(float64))
-		keys := make([]byte, 0)
-		if keysData, ok := data["keys"].([]interface{}); ok {
-			for _, k := range keysData {
-				keys = append(keys, byte(k.(float64)))
+		// 安全获取modifier字段，默认值为0
+		modifier := byte(0)
+		if modifierVal, exists := data["modifier"]; exists && modifierVal != nil {
+			if val, ok := modifierVal.(float64); ok {
+				modifier = byte(val)
 			}
 		}
 
-		log.Printf("Keyboard event: modifier=0x%02x, keys=%v", modifier, keys)
+		// 安全获取keys字段，默认值为空切片
+		keys := make([]byte, 0)
+		if keysData, exists := data["keys"]; exists && keysData != nil {
+			if keysSlice, ok := keysData.([]interface{}); ok {
+				for _, k := range keysSlice {
+					if k != nil {
+						if keyVal, ok := k.(float64); ok {
+							keys = append(keys, byte(keyVal))
+						}
+					}
+				}
+			}
+		}
+
+		// 只在有按键变化时记录日志
+		if len(keys) > 0 || modifier > 0 {
+			log.Printf("Keyboard event: modifier=0x%02x, keys=%v", modifier, keys)
+		}
 
 		// 直接使用接收到的按键码发送报告
 		s.svcCtx.KMHID.SendKeyboardReport(modifier, keys)
@@ -408,11 +428,44 @@ func (s *VideoHandler) handleWSMessage(message []byte) {
 			return
 		}
 
-		buttons := byte(data["buttons"].(float64))
-		dx := int8(data["dx"].(float64))
-		dy := int8(data["dy"].(float64))
-		wheel := int8(data["wheel"].(float64))
+		// 安全获取buttons字段，默认值为0
+		buttons := byte(0)
+		if buttonsVal, exists := data["buttons"]; exists && buttonsVal != nil {
+			if val, ok := buttonsVal.(float64); ok {
+				buttons = byte(val)
+			}
+		}
 
+		// 安全获取坐标字段
+		dx := 0
+		dy := 0
+
+		// 直接从dx和dy字段获取坐标
+		// 根据用户提示：绝对坐标和相对坐标使用的API都是一样的，通过另外的接口控制模式的切换
+		if dxVal, exists := data["dx"]; exists && dxVal != nil {
+			if val, ok := dxVal.(float64); ok {
+				dx = int(val)
+			}
+		}
+		if dyVal, exists := data["dy"]; exists && dyVal != nil {
+			if val, ok := dyVal.(float64); ok {
+				dy = int(val)
+			}
+		}
+
+		// 安全获取wheel字段，默认值为0
+		wheel := int8(0)
+		if wheelVal, exists := data["wheel"]; exists && wheelVal != nil {
+			if val, ok := wheelVal.(float64); ok {
+				wheel = int8(val)
+			}
+		}
+
+		// 记录当前鼠标模式和原始事件数据，用于诊断绝对模式问题
+		absolute := s.svcCtx.KMHID.IsAbsoluteMouse()
+		log.Printf("WS Mouse Data - Type: %d, Mode: %v, Raw: %+v", wsMsg.Type, absolute, data)
+
+		// 记录所有鼠标事件，包括纯移动事件
 		log.Printf("Mouse event: buttons=0x%02x, dx=%d, dy=%d, wheel=%d", buttons, dx, dy, wheel)
 		s.svcCtx.KMHID.SendMouseReport(buttons, dx, dy, wheel)
 
@@ -424,7 +477,14 @@ func (s *VideoHandler) handleWSMessage(message []byte) {
 			return
 		}
 
-		absolute := data["absolute"].(bool)
+		// 安全获取absolute字段，默认值为false
+		absolute := false
+		if absoluteVal, exists := data["absolute"]; exists && absoluteVal != nil {
+			if val, ok := absoluteVal.(bool); ok {
+				absolute = val
+			}
+		}
+
 		log.Printf("Mouse mode change: absolute=%v", absolute)
 		s.svcCtx.KMHID.SetAbsoluteMouse(absolute)
 	default:
