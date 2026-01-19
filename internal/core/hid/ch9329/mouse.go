@@ -14,17 +14,25 @@ const (
 	MouseForward = 0x10 // Forward/Down
 )
 
-// MouseRange 定义鼠标坐标范围（与Python版本一致）
+// MouseRange 定义鼠标坐标范围，与Python版本完全一致
 const (
 	MouseRangeMin = 0
 	MouseRangeMax = 0xFFFF
 )
 
-// MouseDelta 定义鼠标增量范围（与Python版本一致）
+// MouseDelta 定义鼠标增量范围，与Python版本完全一致
 const (
 	MouseDeltaMin = -127
 	MouseDeltaMax = 127
 )
+
+// remap 将值从一个范围映射到另一个范围，与Python版本的MouseRange.remap一致
+func remap(value, fromMin, fromMax, toMin, toMax int) int {
+	// 计算输入值在原范围内的比例
+	ratio := float64(value-fromMin) / float64(fromMax-fromMin)
+	// 映射到目标范围
+	return int(float64(toMin) + ratio*float64(toMax-toMin))
+}
 
 // SetAbsoluteMouse 设置鼠标是否使用绝对模式
 func (d *CH9329Device) SetAbsoluteMouse(absolute bool) error {
@@ -47,47 +55,35 @@ func (d *CH9329Device) SendMouseReport(buttons byte, dx, dy int, wheel int8) err
 	var cmd []byte
 
 	if d.absolute {
-		// 绝对鼠标模式，处理客户端发送的归一化坐标
-		// 前端发送的是归一化坐标（0-32767），需要转换为原始屏幕坐标
-		// 原始屏幕分辨率假设为1920x1080，可根据实际情况调整
-		const (
-			ScreenWidth  = 1920
-			ScreenHeight = 1080
-		)
+		// 绝对鼠标模式，与Python版本完全一致的坐标处理逻辑
+		// 前端发送的是0-65535范围的绝对坐标
+		var absDx, absDy int
 
-		var rawDx, rawDy int
-		if dx >= 0 && dx <= 32767 && dy >= 0 && dy <= 32767 {
-			// 前端发送的是归一化坐标（0-32767），转换为原始屏幕坐标
-			rawDx = int(float64(dx) / 32767 * ScreenWidth)  // 转换为原始X坐标
-			rawDy = int(float64(dy) / 32767 * ScreenHeight) // 转换为原始Y坐标
-		} else {
-			// 如果不是归一化坐标，直接使用
-			rawDx = dx
-			rawDy = dy
+		// 直接使用前端发送的坐标，不再进行额外转换
+		// 确保坐标在0-65535范围内
+		if dx < 0 {
+			dx = 0
 		}
-
-		// 限制原始坐标在屏幕范围内
-		if rawDx < 0 {
-			rawDx = 0
+		if dx > 65535 {
+			dx = 65535
 		}
-		if rawDx > ScreenWidth {
-			rawDx = ScreenWidth
+		if dy < 0 {
+			dy = 0
 		}
-		if rawDy < 0 {
-			rawDy = 0
-		}
-		if rawDy > ScreenHeight {
-			rawDy = ScreenHeight
+		if dy > 65535 {
+			dy = 65535
 		}
 
-		// 转换为CH9329所需的0-65535范围坐标
-		absDx := (rawDx * 65535) / ScreenWidth
-		absDy := (rawDy * 65535) / ScreenHeight
+		absDx = dx
+		absDy = dy
 
-		// 与Python版本一致：将坐标除以8并向上取整
-		// Python代码：to_fixed = math.ceil(MouseRange.remap(value, 0, MouseRange.MAX) / 8)
-		fixedX := (absDx + 7) / 8 // 向上取整的简化计算
-		fixedY := (absDy + 7) / 8 // 向上取整的简化计算
+		// 直接使用0-65535范围的坐标，不需要remap
+		// 直接除以8并向上取整，与Python的math.ceil一致
+		// 65535 / 8 = 8191.875，向上取整为8192，与CH9329的要求一致
+		fixedX := (absDx + 7) / 8
+		fixedY := (absDy + 7) / 8
+		// 添加调试日志，显示转换后的坐标值
+		log.Printf("CH9329: Absolute mouse coords - raw: (%d,%d), fixed: (%d,%d)", absDx, absDy, fixedX, fixedY)
 
 		// 绝对鼠标命令格式，与Python完全一致：
 		// [0, 0x04, 0x07, 0x02, buttons, x_low, x_high, y_low, y_high, wheel]
@@ -110,10 +106,17 @@ func (d *CH9329Device) SendMouseReport(buttons byte, dx, dy int, wheel int8) err
 			wheelByte,            // 滚轮：1表示向上，0表示向下或不动
 		}
 	} else {
-		// 相对鼠标模式，dx和dy是增量
-		// 与Python相同的坐标处理逻辑：除以3并向上取整
+		// 相对鼠标模式，与Python版本完全一致的坐标处理逻辑
+		// Python代码：
+		// def __fix_relative(self, value: int) -> int:
+		//     assert MouseDelta.MIN <= value <= MouseDelta.MAX
+		//     value = math.ceil(value / 3)
+		//     return (value if value >= 0 else (255 + value))
+
 		relDx := dx
 		relDy := dy
+
+		// 确保增量在有效范围内
 		if relDx < MouseDeltaMin {
 			relDx = MouseDeltaMin
 		}
@@ -127,7 +130,7 @@ func (d *CH9329Device) SendMouseReport(buttons byte, dx, dy int, wheel int8) err
 			relDy = MouseDeltaMax
 		}
 
-		// 除以3并向上取整
+		// 除以3并向上取整，与Python的math.ceil一致
 		if relDx > 0 {
 			relDx = (relDx + 2) / 3
 		} else if relDx < 0 {
@@ -140,19 +143,19 @@ func (d *CH9329Device) SendMouseReport(buttons byte, dx, dy int, wheel int8) err
 			relDy = -((-relDy + 2) / 3)
 		}
 
-		// 调整为无符号字节表示
+		// 调整为无符号字节表示，与Python版本一致
 		adjustedDx := byte(0)
 		if relDx > 0 {
 			adjustedDx = byte(relDx)
 		} else if relDx < 0 {
-			adjustedDx = byte(256 + relDx)
+			adjustedDx = byte(255 + relDx) // 与Python版本一致：(255 + value)
 		}
 
 		adjustedDy := byte(0)
 		if relDy > 0 {
 			adjustedDy = byte(relDy)
 		} else if relDy < 0 {
-			adjustedDy = byte(256 + relDy)
+			adjustedDy = byte(255 + relDy) // 与Python版本一致：(255 + value)
 		}
 
 		// 调整滚轮：1表示向上，255表示向下，0表示不动
