@@ -111,12 +111,12 @@ func New(ctx context.Context) *SvcContext {
 	if err := km.AddKeyboard(); err != nil {
 		panic(err)
 	}
-	// 鼠标相对模式
-	if err := km.AddMouse(false); err != nil {
+	// 鼠标绝对模式（先创建，占用/dev/hidg1）
+	if err := km.AddMouse(true, false); err != nil {
 		panic(err)
 	}
-	// 鼠标绝对模式
-	if err := km.AddMouse(true); err != nil {
+	// 鼠标相对模式（后创建，占用/dev/hidg2）
+	if err := km.AddMouse(false, false); err != nil {
 		panic(err)
 	}
 
@@ -138,7 +138,6 @@ func New(ctx context.Context) *SvcContext {
 		s.KMHID = otgm.NewOTGKMHIDControl()
 		if err := s.KMHID.Open(); err != nil {
 			log.Printf("Failed to open OTG HID: %v", err)
-			// 可以选择panic或其他错误处理方式
 		}
 	case "ch9329":
 		s.KMHID = ch9329.NewCH9329()

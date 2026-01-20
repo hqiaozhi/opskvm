@@ -3,6 +3,7 @@ package video
 import (
 	"fmt"
 	"log"
+	"os"
 	"sync"
 
 	"github.com/korandiz/v4l"
@@ -11,6 +12,7 @@ import (
 
 // Camera 定义摄像头设备的核心操作接口
 type Camera interface {
+	FindDevicePath() string
 	Open(path string) error
 	ListConfigs() ([]v4l.DeviceConfig, error)
 	GetConfig() (v4l.DeviceConfig, error)
@@ -45,7 +47,19 @@ func NewV4LCamera() *V4LCamera {
 	return &V4LCamera{}
 }
 
+func (c *V4LCamera) FindDevicePath() string {
+	devs := v4l.FindDevices()
+	if len(devs) == 0 {
+		log.Fatalf("No video devices found")
+		os.Exit(1)
+	}
+	return devs[0].Path
+}
+
 func (c *V4LCamera) Open(path string) error {
+	if path == "" {
+		path = c.FindDevicePath()
+	}
 	dev, err := v4l.Open(path)
 	if err != nil {
 		return err
@@ -57,6 +71,7 @@ func (c *V4LCamera) Open(path string) error {
 		return err
 	}
 	c.cfg = cfg
+	log.Printf("camera: Opened camera device: %s", path)
 	return nil
 }
 

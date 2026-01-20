@@ -6,6 +6,8 @@ import (
 	"os"
 	"syscall"
 	"time"
+
+	"opskvm/internal/core/hid"
 )
 
 // OTG 键盘按键编码（与CH9329保持一致）
@@ -160,38 +162,40 @@ const (
 	MouseForward = 0x10 // Forward/Down
 )
 
-// HIDDevice 定义HID设备接口（与CH9329保持一致）
-type HIDDevice interface {
-	Open(devicePath string) error
-	Close() error
-	SendKeyboardReport(modifier byte, keys []byte) error
-	SendMouseReport(absolute bool, buttons byte, dx, dy, wheelX, wheelY int8) error
-	PressKey(key byte) error
-	ReleaseKey(key byte) error
-	PressKeyWithModifier(modifier byte, key byte) error
-	PressKeyWithModifiers(modifier byte, keys ...byte) error
-	ClearScreen() error
-	Reboot() error
-	TypeString(s string) error
-	MoveMouse(dx, dy int8) error
-	ClickMouse(button byte) error
-	ScrollMouse(wheel int8) error
-}
-
-// OTGKMHIDControl 实现HIDDevice接口（OTG模式）
+// OTGKMHIDControl 实现KMHIDController接口（OTG模式）
 type OTGKMHIDControl struct {
 	keyboardDev      *os.File
 	relativeMouseDev *os.File
 	absoluteMouseDev *os.File
 	absolute         bool // 鼠标模式：true为绝对模式，false为相对模式
 	isOpen           bool // 设备是否处于打开状态
+
+	// 键盘状态
+	modifiers  byte   // 当前修饰键状态
+	activeKeys []byte // 当前按下的按键（最多6个）
+
+	// 鼠标状态
+	mouseButtons byte // 当前鼠标按键状态
+	mouseX       int  // 绝对鼠标X坐标
+	mouseY       int  // 绝对鼠标Y坐标
+	mouseDeltaX  int  // 相对鼠标X增量
+	mouseDeltaY  int  // 相对鼠标Y增量
+	mouseWheel   int8 // 鼠标滚轮状态
 }
 
 // NewOTGKMHIDControl 创建新的OTGKMHIDControl实例
-func NewOTGKMHIDControl() *OTGKMHIDControl {
+func NewOTGKMHIDControl() hid.KMHIDController {
 	return &OTGKMHIDControl{
-		absolute: false, // 默认使用相对鼠标模式
-		isOpen:   false, // 初始状态为关闭
+		absolute:     false,           // 默认使用相对鼠标模式
+		isOpen:       false,           // 初始状态为关闭
+		modifiers:    0x00,            // 初始修饰键状态为0
+		activeKeys:   make([]byte, 0), // 初始按下的按键为空
+		mouseButtons: 0x00,            // 初始鼠标按键状态为0
+		mouseX:       0,               // 初始绝对鼠标X坐标为0
+		mouseY:       0,               // 初始绝对鼠标Y坐标为0
+		mouseDeltaX:  0,               // 初始相对鼠标X增量为0
+		mouseDeltaY:  0,               // 初始相对鼠标Y增量为0
+		mouseWheel:   0,               // 初始鼠标滚轮状态为0
 	}
 }
 
@@ -208,7 +212,7 @@ func (d *OTGKMHIDControl) IsAbsoluteMouse() bool {
 }
 
 // open 内部方法：打开HID设备文件，添加重试机制
-func (d *OTGKMHIDControl) open(devicePath string) error {
+func (d *OTGKMHIDControl) open() error {
 	var err error
 
 	log.Printf("Opening OTG HID devices...")
@@ -217,10 +221,10 @@ func (d *OTGKMHIDControl) open(devicePath string) error {
 	maxRetries := 5
 	retryDelay := 200 * time.Millisecond
 
-	// 打开键盘设备文件 (/dev/hidg0)
+	// 打开键盘设备文件 (/dev/hidg0)，使用非阻塞模式
 	for i := 0; i < maxRetries; i++ {
 		log.Printf("Opening keyboard device /dev/hidg0... (attempt %d/%d)", i+1, maxRetries)
-		d.keyboardDev, err = os.OpenFile("/dev/hidg0", os.O_WRONLY, 0)
+		d.keyboardDev, err = os.OpenFile("/dev/hidg0", os.O_WRONLY|syscall.O_NONBLOCK, 0)
 		if err == nil {
 			log.Printf("Successfully opened /dev/hidg0")
 			break
@@ -232,10 +236,10 @@ func (d *OTGKMHIDControl) open(devicePath string) error {
 		}
 	}
 
-	// 打开相对鼠标设备文件 (/dev/hidg1)
+	// 打开绝对鼠标设备文件 (/dev/hidg1)，使用非阻塞模式
 	for i := 0; i < maxRetries; i++ {
-		log.Printf("Opening relative mouse device /dev/hidg1... (attempt %d/%d)", i+1, maxRetries)
-		d.relativeMouseDev, err = os.OpenFile("/dev/hidg1", os.O_WRONLY, 0)
+		log.Printf("Opening absolute mouse device /dev/hidg1... (attempt %d/%d)", i+1, maxRetries)
+		d.absoluteMouseDev, err = os.OpenFile("/dev/hidg1", os.O_WRONLY|syscall.O_NONBLOCK, 0)
 		if err == nil {
 			log.Printf("Successfully opened /dev/hidg1")
 			break
@@ -248,10 +252,10 @@ func (d *OTGKMHIDControl) open(devicePath string) error {
 		}
 	}
 
-	// 打开绝对鼠标设备文件 (/dev/hidg2)
+	// 打开相对鼠标设备文件 (/dev/hidg2)，使用非阻塞模式
 	for i := 0; i < maxRetries; i++ {
-		log.Printf("Opening absolute mouse device /dev/hidg2... (attempt %d/%d)", i+1, maxRetries)
-		d.absoluteMouseDev, err = os.OpenFile("/dev/hidg2", os.O_WRONLY, 0)
+		log.Printf("Opening relative mouse device /dev/hidg2... (attempt %d/%d)", i+1, maxRetries)
+		d.relativeMouseDev, err = os.OpenFile("/dev/hidg2", os.O_WRONLY|syscall.O_NONBLOCK, 0)
 		if err == nil {
 			log.Printf("Successfully opened /dev/hidg2")
 			break
@@ -260,7 +264,7 @@ func (d *OTGKMHIDControl) open(devicePath string) error {
 		time.Sleep(retryDelay)
 		if i == maxRetries-1 {
 			d.keyboardDev.Close()
-			d.relativeMouseDev.Close()
+			d.absoluteMouseDev.Close()
 			return fmt.Errorf("failed to open /dev/hidg2 after %d retries: %w", maxRetries, err)
 		}
 	}
@@ -278,7 +282,7 @@ func (d *OTGKMHIDControl) Open() error {
 		return fmt.Errorf("device already open")
 	}
 	// 调用内部方法打开设备，忽略devicePath参数
-	return d.open("")
+	return d.open()
 }
 
 // Close 关闭HID设备文件，在关闭前释放所有按键
@@ -317,9 +321,24 @@ func (d *OTGKMHIDControl) Close() error {
 
 // SendKeyboardReport 发送键盘HID报告，添加错误处理和重连机制
 func (d *OTGKMHIDControl) SendKeyboardReport(modifier byte, keys []byte) error {
-	// 检查设备是否已打开
+	// 检查设备是否已打开，如果未打开则尝试打开
 	if !d.isOpen {
-		return fmt.Errorf("device not open")
+		log.Printf("Device not open, attempting to open...")
+		if err := d.open(); err != nil {
+			log.Printf("Failed to open devices: %v", err)
+			return nil
+		}
+	}
+
+	// 检查设备文件描述符是否有效
+	if d.keyboardDev == nil {
+		log.Printf("Keyboard device not initialized, attempting to reopen...")
+		// 重新打开所有设备
+		if err := d.open(); err != nil {
+			log.Printf("Failed to reopen devices: %v", err)
+			d.isOpen = false
+			return nil
+		}
 	}
 
 	// 键盘报告格式：
@@ -343,54 +362,93 @@ func (d *OTGKMHIDControl) SendKeyboardReport(modifier byte, keys []byte) error {
 	_, err := d.keyboardDev.Write(report)
 	if err != nil {
 		log.Printf("Failed to write keyboard report: %v, attempting to reconnect...", err)
-		// 尝试重新打开键盘设备
-		newDev, reopenErr := os.OpenFile("/dev/hidg0", os.O_WRONLY, 0)
-		if reopenErr != nil {
-			log.Printf("Failed to reopen keyboard device: %v", reopenErr)
-			return nil // 忽略，因为设备可能不存在
+		// 关闭所有设备
+		d.closeDevices()
+
+		// 尝试重新打开所有设备
+		if reopenErr := d.open(); reopenErr != nil {
+			log.Printf("Failed to reopen all devices: %v", reopenErr)
+			d.isOpen = false
+			return nil
 		}
-		// 关闭旧设备，使用新设备
-		d.keyboardDev.Close()
-		d.keyboardDev = newDev
-		log.Printf("Successfully reconnected keyboard device")
+
+		// 重连后增加短暂延迟，给设备时间初始化
+		time.Sleep(100 * time.Millisecond)
+
 		// 再次尝试写入
 		_, err = d.keyboardDev.Write(report)
 		if err != nil {
 			log.Printf("Failed to write keyboard report after reconnect: %v", err)
-			return nil // 忽略，因为设备可能不存在
+			// 关闭所有设备并重置状态
+			d.closeDevices()
+			d.isOpen = false
+			return nil
 		}
+		log.Printf("Successfully wrote keyboard report after reconnect")
 	}
 	return nil
 }
 
-// sendMouseReportInternal 内部方法：发送鼠标HID报告，根据内部绝对模式标志选择相对或绝对，支持水平滚动
-func (d *OTGKMHIDControl) sendMouseReportInternal(buttons byte, dx, dy int, wheelX, wheelY int8) error {
+// sendMouseReportInternal 内部方法：发送鼠标HID报告，根据内部绝对模式标志选择相对或绝对
+func (d *OTGKMHIDControl) sendMouseReportInternal(buttons byte, dx, dy int, wheelY int8) error {
 	// 检查设备是否已打开
 	if !d.isOpen {
 		return fmt.Errorf("device not open")
 	}
 
-	log.Printf("Sending mouse report: internal_absolute=%v, buttons=0x%02x, dx=%d, dy=%d, wheelX=%d, wheelY=%d", d.absolute, buttons, dx, dy, wheelX, wheelY)
+	log.Printf("Sending mouse report: internal_absolute=%v, buttons=0x%02x, dx=%d, dy=%d, wheelY=%d", d.absolute, buttons, dx, dy, wheelY)
 	if d.absolute {
-		return d.SendAbsoluteMouseReport(buttons, dx, dy, wheelX, wheelY)
+		return d.SendAbsoluteMouseReport(buttons, dx, dy, wheelY)
 	}
-	return d.SendRelativeMouseReport(buttons, dx, dy, wheelX, wheelY)
+	return d.SendRelativeMouseReport(buttons, dx, dy, wheelY)
 }
 
 // SendMouseReport 实现KMHIDController接口的SendMouseReport方法
 func (d *OTGKMHIDControl) SendMouseReport(buttons byte, dx, dy int, wheel int8) error {
-	// 调用内部方法，传入当前的absolute状态，wheelY=wheel，wheelX=0
-	return d.sendMouseReportInternal(buttons, dx, dy, 0, wheel)
+	// 自动检测并切换鼠标模式：如果dx和dy在绝对坐标范围内（0-65535），切换到绝对模式
+	if (dx >= 0 && dx <= 65535) && (dy >= 0 && dy <= 65535) {
+		if !d.absolute {
+			log.Printf("Auto-switching to absolute mouse mode based on coordinate range")
+			d.SetAbsoluteMouse(true)
+		}
+	} else {
+		if d.absolute {
+			log.Printf("Auto-switching to relative mouse mode based on coordinate range")
+			d.SetAbsoluteMouse(false)
+		}
+	}
+
+	// 调用内部方法，传入当前的absolute状态，wheelY=wheel
+	return d.sendMouseReportInternal(buttons, dx, dy, wheel)
 }
 
-// SendRelativeMouseReport 发送相对鼠标HID报告，支持水平滚动
-func (d *OTGKMHIDControl) SendRelativeMouseReport(buttons byte, dx, dy int, wheelX, wheelY int8) error {
+// SendRelativeMouseReport 发送相对鼠标HID报告
+func (d *OTGKMHIDControl) SendRelativeMouseReport(buttons byte, dx, dy int, wheelY int8) error {
+	// 检查设备是否已打开，如果未打开则尝试打开
+	if !d.isOpen {
+		log.Printf("Device not open, attempting to open...")
+		if err := d.open(); err != nil {
+			log.Printf("Failed to open devices: %v", err)
+			return nil
+		}
+	}
+
+	// 检查设备文件描述符是否有效
+	if d.relativeMouseDev == nil {
+		log.Printf("Relative mouse device not initialized, attempting to reopen...")
+		// 重新打开所有设备
+		if err := d.open(); err != nil {
+			log.Printf("Failed to reopen devices: %v", err)
+			d.isOpen = false
+			return nil
+		}
+	}
+
 	// 相对鼠标模式报告格式：
 	// 第1字节：按钮状态
 	// 第2字节：X轴增量
 	// 第3字节：Y轴增量
 	// 第4字节：垂直滚轮增量
-	// 第5字节：水平滚轮增量（固定包含，与设备描述符一致）
 	// 限制dx和dy在-127到127范围内
 	reldx := int8(dx)
 	if reldx < -127 {
@@ -408,49 +466,72 @@ func (d *OTGKMHIDControl) SendRelativeMouseReport(buttons byte, dx, dy int, whee
 		reldy = 127
 	}
 
-	report := make([]byte, 5)
+	report := make([]byte, 4)
 	report[0] = buttons
 	report[1] = byte(reldx)  // 在相对模式下，dx是相对增量，直接转换为byte
 	report[2] = byte(reldy)  // 在相对模式下，dy是相对增量，直接转换为byte
 	report[3] = byte(wheelY) // 垂直滚轮增量
-	report[4] = byte(wheelX) // 水平滚轮增量（固定包含，与设备描述符一致）
 
 	log.Printf("Sending relative mouse report: report=%v", report)
 
 	// 写入相对鼠标设备文件 (/dev/hidg1)
 	_, err := d.relativeMouseDev.Write(report)
 	if err != nil {
-		log.Printf("Failed to write relative mouse report: %v, attempting to reopen device...", err)
-		// 关闭当前设备
-		d.relativeMouseDev.Close()
-		d.relativeMouseDev = nil
+		log.Printf("Failed to write relative mouse report: %v, attempting to reconnect...", err)
+		// 关闭所有设备
+		d.closeDevices()
 
-		// 尝试重新打开相对鼠标设备，设置非阻塞模式
-		newDev, reopenErr := os.OpenFile("/dev/hidg1", os.O_WRONLY|syscall.O_NONBLOCK, 0644)
-		if reopenErr != nil {
-			log.Printf("Failed to reopen relative mouse device: %v", reopenErr)
-			// 不返回错误，让调用者继续执行
+		// 尝试重新打开所有设备
+		if reopenErr := d.open(); reopenErr != nil {
+			log.Printf("Failed to reopen all devices: %v", reopenErr)
+			d.isOpen = false
 			return nil
 		}
 
-		// 使用新设备
-		d.relativeMouseDev = newDev
-		log.Printf("Successfully reopened relative mouse device")
+		// 重连后增加短暂延迟，给设备时间初始化
+		time.Sleep(100 * time.Millisecond)
 
-		// 不再次尝试写入，让调用者重试
-		return nil
+		// 再次尝试写入
+		_, err = d.relativeMouseDev.Write(report)
+		if err != nil {
+			log.Printf("Failed to write relative mouse report after reconnect: %v", err)
+			// 关闭所有设备并重置状态
+			d.closeDevices()
+			d.isOpen = false
+			return nil
+		}
+		log.Printf("Successfully wrote relative mouse report after reconnect")
 	}
 	return nil
 }
 
-// SendAbsoluteMouseReport 发送绝对鼠标HID报告，支持水平滚动
-func (d *OTGKMHIDControl) SendAbsoluteMouseReport(buttons byte, x, y int, wheelX, wheelY int8) error {
+// SendAbsoluteMouseReport 发送绝对鼠标HID报告
+func (d *OTGKMHIDControl) SendAbsoluteMouseReport(buttons byte, x, y int, wheelY int8) error {
+	// 检查设备是否已打开，如果未打开则尝试打开
+	if !d.isOpen {
+		log.Printf("Device not open, attempting to open...")
+		if err := d.open(); err != nil {
+			log.Printf("Failed to open devices: %v", err)
+			return nil
+		}
+	}
+
+	// 检查设备文件描述符是否有效
+	if d.absoluteMouseDev == nil {
+		log.Printf("Absolute mouse device not initialized, attempting to reopen...")
+		// 重新打开所有设备
+		if err := d.open(); err != nil {
+			log.Printf("Failed to reopen devices: %v", err)
+			d.isOpen = false
+			return nil
+		}
+	}
+
 	// 绝对鼠标模式报告格式：
 	// 第1字节：按钮状态
 	// 第2-3字节：X轴绝对坐标（16位）
 	// 第4-5字节：Y轴绝对坐标（16位）
 	// 第6字节：垂直滚轮增量
-	// 第7字节：水平滚轮增量（固定包含，与设备描述符一致）
 	// 归一化计算：处理客户端发送的坐标
 	// 检查客户端发送的坐标范围：
 	// 如果x在0-65535范围内，直接使用
@@ -478,41 +559,61 @@ func (d *OTGKMHIDControl) SendAbsoluteMouseReport(buttons byte, x, y int, wheelX
 		absY = 65535
 	}
 
-	report := make([]byte, 7)
+	report := make([]byte, 6)
 	report[0] = buttons
 	report[1] = byte(absX & 0xFF) // X坐标低字节
 	report[2] = byte(absX >> 8)   // X坐标高字节
 	report[3] = byte(absY & 0xFF) // Y坐标低字节
 	report[4] = byte(absY >> 8)   // Y坐标高字节
 	report[5] = byte(wheelY)      // 垂直滚轮增量
-	report[6] = byte(wheelX)      // 总是包含水平滚轮字节，与设备描述符一致
 
 	log.Printf("Sending absolute mouse report: x=%d, y=%d, absX=%d, absY=%d, report=%v", x, y, absX, absY, report)
 
 	// 写入绝对鼠标设备文件 (/dev/hidg2)
 	_, err := d.absoluteMouseDev.Write(report)
 	if err != nil {
-		log.Printf("Failed to write absolute mouse report: %v, attempting to reopen device...", err)
-		// 关闭当前设备
-		d.absoluteMouseDev.Close()
-		d.absoluteMouseDev = nil
+		log.Printf("Failed to write absolute mouse report: %v, attempting to reconnect...", err)
+		// 关闭所有设备
+		d.closeDevices()
 
-		// 尝试重新打开绝对鼠标设备，设置非阻塞模式
-		newDev, reopenErr := os.OpenFile("/dev/hidg2", os.O_WRONLY|syscall.O_NONBLOCK, 0644)
-		if reopenErr != nil {
-			log.Printf("Failed to reopen absolute mouse device: %v", reopenErr)
-			// 不返回错误，让调用者继续执行
+		// 尝试重新打开所有设备
+		if reopenErr := d.open(); reopenErr != nil {
+			log.Printf("Failed to reopen all devices: %v", reopenErr)
+			d.isOpen = false
 			return nil
 		}
 
-		// 使用新设备
-		d.absoluteMouseDev = newDev
-		log.Printf("Successfully reopened absolute mouse device")
+		// 重连后增加短暂延迟，给设备时间初始化
+		time.Sleep(100 * time.Millisecond)
 
-		// 不再次尝试写入，让调用者重试
-		return nil
+		// 再次尝试写入
+		_, err = d.absoluteMouseDev.Write(report)
+		if err != nil {
+			log.Printf("Failed to write absolute mouse report after reconnect: %v", err)
+			// 关闭所有设备并重置状态
+			d.closeDevices()
+			d.isOpen = false
+			return nil
+		}
+		log.Printf("Successfully wrote absolute mouse report after reconnect")
 	}
 	return nil
+}
+
+// closeDevices 关闭所有设备文件描述符
+func (d *OTGKMHIDControl) closeDevices() {
+	if d.keyboardDev != nil {
+		d.keyboardDev.Close()
+		d.keyboardDev = nil
+	}
+	if d.relativeMouseDev != nil {
+		d.relativeMouseDev.Close()
+		d.relativeMouseDev = nil
+	}
+	if d.absoluteMouseDev != nil {
+		d.absoluteMouseDev.Close()
+		d.absoluteMouseDev = nil
+	}
 }
 
 // PressKey 按下单个按键
@@ -565,19 +666,19 @@ func (d *OTGKMHIDControl) PressKeyWithModifiers(modifier byte, keys ...byte) err
 
 // MoveMouse 移动鼠标（相对模式）
 func (d *OTGKMHIDControl) MoveMouse(dx, dy int) error {
-	return d.sendMouseReportInternal(0x00, dx, dy, 0, 0)
+	return d.sendMouseReportInternal(0x00, dx, dy, 0)
 }
 
 // ClickMouse 点击鼠标
 func (d *OTGKMHIDControl) ClickMouse(button byte) error {
 	// 按下
-	if err := d.sendMouseReportInternal(button, 0, 0, 0, 0); err != nil {
+	if err := d.sendMouseReportInternal(button, 0, 0, 0); err != nil {
 		return err
 	}
 	time.Sleep(50 * time.Millisecond)
 
 	// 释放
-	if err := d.sendMouseReportInternal(0x00, 0, 0, 0, 0); err != nil {
+	if err := d.sendMouseReportInternal(0x00, 0, 0, 0); err != nil {
 		return err
 	}
 
@@ -586,17 +687,107 @@ func (d *OTGKMHIDControl) ClickMouse(button byte) error {
 
 // ScrollMouse 滚动鼠标（垂直）
 func (d *OTGKMHIDControl) ScrollMouse(wheel int8) error {
-	return d.sendMouseReportInternal(0x00, 0, 0, 0, wheel)
+	return d.sendMouseReportInternal(0x00, 0, 0, wheel)
 }
 
 // MoveRelativeMouse 相对移动鼠标
 func (d *OTGKMHIDControl) MoveRelativeMouse(dx, dy int) error {
-	return d.SendRelativeMouseReport(0x00, dx, dy, 0, 0)
+	return d.SendRelativeMouseReport(0x00, dx, dy, 0)
 }
 
 // MoveAbsoluteMouse 移动绝对鼠标
 func (d *OTGKMHIDControl) MoveAbsoluteMouse(x, y int) error {
-	return d.SendAbsoluteMouseReport(0, x, y, 0, 0)
+	return d.SendAbsoluteMouseReport(0, x, y, 0)
+}
+
+// ProcessButton 处理鼠标按键事件，与CH9329保持一致
+func (d *OTGKMHIDControl) ProcessButton(button byte, state bool) error {
+	if state {
+		d.mouseButtons |= button
+	} else {
+		d.mouseButtons &= ^button
+	}
+
+	// 重置滚轮状态
+	d.mouseWheel = 0
+
+	// 发送鼠标报告
+	if d.absolute {
+		return d.SendMouseReport(d.mouseButtons, d.mouseX, d.mouseY, d.mouseWheel)
+	} else {
+		return d.SendMouseReport(d.mouseButtons, d.mouseDeltaX, d.mouseDeltaY, d.mouseWheel)
+	}
+}
+
+// ProcessMove 处理鼠标绝对移动事件，与CH9329保持一致
+func (d *OTGKMHIDControl) ProcessMove(toX, toY int) error {
+	d.mouseX = toX
+	d.mouseY = toY
+
+	// 重置滚轮状态
+	d.mouseWheel = 0
+
+	// 发送鼠标报告
+	return d.SendMouseReport(d.mouseButtons, d.mouseX, d.mouseY, d.mouseWheel)
+}
+
+// ProcessRelativeMove 处理鼠标相对移动事件，与CH9329保持一致
+func (d *OTGKMHIDControl) ProcessRelativeMove(deltaX, deltaY int) error {
+	d.mouseDeltaX = deltaX
+	d.mouseDeltaY = deltaY
+
+	// 重置滚轮状态
+	d.mouseWheel = 0
+
+	// 发送鼠标报告
+	return d.SendMouseReport(d.mouseButtons, d.mouseDeltaX, d.mouseDeltaY, d.mouseWheel)
+}
+
+// ProcessWheel 处理鼠标滚轮事件，与CH9329保持一致
+func (d *OTGKMHIDControl) ProcessWheel(deltaY int8) error {
+	d.mouseWheel = deltaY
+
+	// 发送鼠标报告
+	if d.absolute {
+		return d.SendMouseReport(d.mouseButtons, d.mouseX, d.mouseY, d.mouseWheel)
+	} else {
+		return d.SendMouseReport(d.mouseButtons, d.mouseDeltaX, d.mouseDeltaY, d.mouseWheel)
+	}
+}
+
+// ProcessKey 处理键盘按键事件，与CH9329保持一致
+func (d *OTGKMHIDControl) ProcessKey(key byte, isModifier bool, state bool) error {
+	if state {
+		if isModifier {
+			d.modifiers |= key
+		} else if len(d.activeKeys) < 6 {
+			// 检查按键是否已在活动列表中
+			found := false
+			for _, k := range d.activeKeys {
+				if k == key {
+					found = true
+					break
+				}
+			}
+			if !found {
+				d.activeKeys = append(d.activeKeys, key)
+			}
+		}
+	} else {
+		if isModifier {
+			d.modifiers &= ^key
+		} else {
+			// 从活动列表中移除按键
+			for i, k := range d.activeKeys {
+				if k == key {
+					d.activeKeys = append(d.activeKeys[:i], d.activeKeys[i+1:]...)
+					break
+				}
+			}
+		}
+	}
+	// 发送键盘报告
+	return d.SendKeyboardReport(d.modifiers, d.activeKeys)
 }
 
 // ClearScreen 清屏（模拟 Ctrl+L 快捷键）

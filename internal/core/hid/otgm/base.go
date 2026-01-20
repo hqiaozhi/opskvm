@@ -57,23 +57,13 @@ func (g *Gadget) Mkdir(path string) error {
 
 // Write 写入文件
 func (g *Gadget) Write(path string, value string) error {
-	// 检查文件是否存在
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		// 如果文件不存在，直接返回nil，不报错
-		return nil
-	}
-	// 写入文件
+	// 写入文件，不存在则创建
 	return os.WriteFile(path, []byte(value), 0644)
 }
 
 // WriteBytes 写入字节数据
 func (g *Gadget) WriteBytes(path string, data []byte) error {
-	// 检查文件是否存在
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		// 如果文件不存在，直接返回nil，不报错
-		return nil
-	}
-	// 写入文件
+	// 写入文件，不存在则创建
 	return os.WriteFile(path, data, 0644)
 }
 
@@ -99,135 +89,133 @@ func (g *Gadget) Unlink(path string) error {
 
 // InitConfig 初始化配置
 func (g *Gadget) InitConfig() (string, error) {
+	log.Printf("Gadget: Starting USB Gadget initialization")
+	log.Println("==================================================")
 
-	// 首先确保旧的Gadget目录已经被完全删除，使用Remove方法顺序删除
+	// 尝试删除旧的Gadget目录
 	if err := g.Remove(); err != nil {
-		log.Printf("Warning: Failed to remove old Gadget directory: %v, trying to create new one anyway", err)
-		os.Exit(1)
+		log.Printf("Gadget: Failed to remove old Gadget directory: %v", err)
 	}
+	// 给控制器足够的时间完成重置
+	time.Sleep(5 * time.Second)
 
+	// ===================================================
 	type config struct {
-		VendorID      string
-		ProductID     string
-		USBVersion    string
-		Manufacturer  string
-		Product       string
-		Serial        string
+		BcdDevice string
+		IdProduct string
+		IdVendor  string
+		BcdUSB    string
+
+		Manufacturer string
+		Product      string
+		Serialnumber string
+
 		Configuration string
-		MaxPower      string
+
+		MaxPower     string
+		BmAttributes string
 	}
 	conf := config{
-		VendorID:      "0x1D6B",            // Linux Foundation
-		ProductID:     "0x0104",            // Multifunction Composite Gadget
-		USBVersion:    "0x0200",            // USB 2.0
-		Manufacturer:  "OpsKVM Composite",  // 产品制造商
-		Product:       "OTG Device",        // 产品名称
-		Serial:        "0000001",           // 产品序列号
-		Configuration: "OTG Configuration", // 配置名称
-		MaxPower:      "500",               // 最大功率
+		// 设备信息
+		BcdDevice: "0x0100", // Version 1.0
+		BcdUSB:    "0x0200", // USB 2.0
+		IdVendor:  "0x1d6b", // Linux Foundation
+		IdProduct: "0x0104", // Multifunction Composite Gadget
+
+		// 产品信息
+		Manufacturer: "OpsKVM",                  // 产品制造商
+		Product:      "OpsKVM Composite Device", // 产品名称
+		Serialnumber: "156491324564",            // 产品序列号
+
+		// c.1配置信息
+		BmAttributes: "0xa0", // 功能描述
+		MaxPower:     "500",  // 最大功率
 	}
 
-	log.Printf("Initializing USB Gadget at path: %s", g.gadgetPath)
-
-	// 检查configfs是否挂载
-	configfsPath := "/sys/kernel/config"
-	if _, err := os.Stat(configfsPath); os.IsNotExist(err) {
-		return "", logError("configfs not mounted at %s", configfsPath)
-	}
-	log.Printf("configfs is mounted at %s", configfsPath)
-
-	// 然后创建Gadget根目录
-	log.Printf("Creating Gadget root directory: %s", g.gadgetPath)
+	// 创建Gadget根目录
+	log.Printf("Gadget: Creating Gadget root directory: %s", g.gadgetPath)
 	err := g.Mkdir(g.gadgetPath)
 	if err != nil {
 		return "", logError("Failed to create Gadget root directory: %w", err)
 	}
-	log.Printf("Successfully created Gadget root directory: %s", g.gadgetPath)
+	log.Printf("Gadget: Successfully created Gadget root directory: %s", g.gadgetPath)
 
+	// 给系统时间更新目录结构
+	time.Sleep(100 * time.Millisecond)
+
+	// ===================================================
 	// 设置USB描述符
-	log.Printf("Setting USB descriptors...")
-	err = g.Write(filepath.Join(g.gadgetPath, "idVendor"), conf.VendorID)
-	if err != nil {
-		return "", logError("Failed to write idVendor: %w", err)
+	log.Printf("Gadget: Setting USB descriptors...")
+	gadgetDescriptors := map[string]string{
+		"idVendor":  conf.IdVendor,
+		"idProduct": conf.IdProduct,
+		"bcdUSB":    conf.BcdUSB,
+		"bcdDevice": conf.BcdDevice,
 	}
-	err = g.Write(filepath.Join(g.gadgetPath, "idProduct"), conf.ProductID)
-	if err != nil {
-		return "", logError("Failed to write idProduct: %w", err)
-	}
-	err = g.Write(filepath.Join(g.gadgetPath, "bcdUSB"), conf.USBVersion)
-	if err != nil {
-		return "", logError("Failed to write bcdUSB: %w", err)
-	}
-	log.Printf("Successfully set USB descriptors")
 
-	// 创建字符串描述符目录
-	log.Printf("Creating strings directory...")
-	stringsPath := filepath.Join(g.gadgetPath, "strings")
-	err = g.Mkdir(stringsPath)
-	if err != nil {
-		return "", logError("Failed to create strings directory: %w", err)
+	for desc, value := range gadgetDescriptors {
+		path := filepath.Join(g.gadgetPath, desc)
+		err = g.Write(path, value)
+		if err != nil {
+			return "", logError("Failed to write %s: %w", desc, err)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	strings0x409Path := filepath.Join(stringsPath, "0x409")
-	err = g.Mkdir(strings0x409Path)
+	log.Printf("Gadget: Successfully set USB descriptors")
+
+	// ===================================================
+	// 创建字符串描述符目录
+	stringsPath := filepath.Join(g.gadgetPath, "strings", "0x409")
+	err = g.Mkdir(stringsPath)
 	if err != nil {
 		return "", logError("Failed to create strings/0x409 directory: %w", err)
 	}
-	log.Printf("Successfully created strings directory structure")
+	log.Printf("Gadget: Successfully created strings directory structure")
+	time.Sleep(100 * time.Millisecond)
 
 	// 写入字符串描述符
-	log.Printf("Writing string descriptors...")
-	err = g.Write(filepath.Join(strings0x409Path, "manufacturer"), conf.Manufacturer)
-	if err != nil {
-		return "", logError("Failed to write manufacturer: %w", err)
+	log.Printf("Gadget: Writing string descriptors...")
+	stringDescriptors := map[string]string{
+		"manufacturer": conf.Manufacturer,
+		"product":      conf.Product,
+		"serialnumber": conf.Serialnumber,
 	}
-	err = g.Write(filepath.Join(strings0x409Path, "product"), conf.Product)
-	if err != nil {
-		return "", logError("Failed to write product: %w", err)
-	}
-	err = g.Write(filepath.Join(strings0x409Path, "serialnumber"), conf.Serial)
-	if err != nil {
-		return "", logError("Failed to write serialnumber: %w", err)
-	}
-	log.Printf("Successfully wrote string descriptors")
 
-	// 创建functions目录
-	functionsPath := filepath.Join(g.gadgetPath, "functions")
-	log.Printf("Creating functions directory: %s", functionsPath)
-	err = g.Mkdir(functionsPath)
-	if err != nil {
-		return "", logError("Failed to create functions directory: %w", err)
+	for file, value := range stringDescriptors {
+		path := filepath.Join(stringsPath, file)
+		err = g.Write(path, value)
+		if err != nil {
+			return "", logError("Failed to write %s: %w", file, err)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	log.Printf("Successfully created functions directory: %s", functionsPath)
+	log.Printf("Gadget: Successfully wrote string descriptors")
 
-	// 创建配置
-	log.Printf("Creating configuration directory...")
+	// 创建配置目录c.1
 	configPath := filepath.Join(g.gadgetPath, "configs", "c.1")
 	err = g.Mkdir(configPath)
 	if err != nil {
 		return "", logError("Failed to create configuration directory: %w", err)
 	}
-	log.Printf("Successfully created configuration directory: %s", configPath)
+	log.Printf("Gadget: Successfully created configuration directory: %s", configPath)
+	time.Sleep(100 * time.Millisecond)
 
-	// 写入配置
-	log.Printf("Writing configuration...")
+	// 写入c.1配置
+	// ==================================================================================
+	// 写入MaxPower
 	err = g.Write(filepath.Join(configPath, "MaxPower"), conf.MaxPower)
 	if err != nil {
 		return "", logError("Failed to write MaxPower: %w", err)
 	}
-	err = g.Write(filepath.Join(configPath, "bmAttributes"), "0xA0")
+	time.Sleep(50 * time.Millisecond)
+
+	// bmAttributes：0xa0表示总线供电，支持远程唤醒
+	err = g.Write(filepath.Join(configPath, "bmAttributes"), conf.BmAttributes)
 	if err != nil {
 		return "", logError("Failed to write bmAttributes: %w", err)
 	}
-	configStringsPath := filepath.Join(configPath, "strings/0x409")
-	err = g.Mkdir(configStringsPath)
-	if err != nil {
-		return "", logError("Failed to create config strings directory: %w", err)
-	}
-	err = g.Write(filepath.Join(configStringsPath, "configuration"), conf.Configuration)
-	if err != nil {
-		return "", logError("Failed to write configuration string: %w", err)
-	}
-	log.Printf("Successfully wrote configuration")
+
+	time.Sleep(2 * time.Second)
 
 	log.Printf("USB Gadget initialization completed successfully")
 	return g.Name, nil
@@ -277,40 +265,72 @@ func (g *Gadget) StartFunction(funcName string) error {
 }
 
 func (g *Gadget) StartUDC() error {
-	err := g.Write(filepath.Join(g.gadgetPath, "UDC"), g.UDCControlName)
-	if err != nil {
-		return err
-	}
-	return nil
-}
+	udcPath := filepath.Join(g.gadgetPath, "UDC")
+	maxRetries := 3
+	retryDelay := 1 * time.Second
 
-func (g *Gadget) CloseUDC() error {
-	// 先打开文件看看是否有内容，如果为空则跳过
-	content, err := os.ReadFile(filepath.Join(g.gadgetPath, "UDC"))
-	if err != nil {
-		return fmt.Errorf("读取UDC文件失败：%w", err)
-	}
-	if len(content) < 2 {
+	for i := 0; i < maxRetries; i++ {
+		// 启动UDC设备
+		log.Printf("Starting UDC device: %s (attempt %d/%d)", g.UDCControlName, i+1, maxRetries)
+		err := g.Write(udcPath, g.UDCControlName)
+		if err != nil {
+			log.Printf("Error: Failed to start UDC: %v", err)
+			if i < maxRetries-1 {
+				log.Printf("Retrying in %v...", retryDelay)
+				time.Sleep(retryDelay)
+				continue
+			}
+			return err
+		}
+
+		// 给控制器一些时间初始化
+		log.Printf("Giving controller %v to initialize...", 500*time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
+		log.Printf("UDC device started successfully: %s", g.UDCControlName)
 		return nil
 	}
 
-	// 关闭UDC设备
-	err = g.Write(filepath.Join(g.gadgetPath, "UDC"), "\n")
+	return fmt.Errorf("Failed to start UDC after %d attempts", maxRetries)
+}
+
+func (g *Gadget) CloseUDC() error {
+	udcPath := filepath.Join(g.gadgetPath, "UDC")
+
+	// 先检查文件是否存在
+	if _, err := os.Stat(udcPath); os.IsNotExist(err) {
+		// 文件不存在，直接返回nil，不报错
+		return nil
+	}
+
+	// 先打开文件看看是否有内容，如果为空则跳过
+	content, err := os.ReadFile(udcPath)
+	if err != nil {
+		// 读取文件失败，返回错误
+		return fmt.Errorf("读取UDC文件失败：%w", err)
+	}
+	if len(content) < 2 {
+		// 内容为空，跳过关闭
+		return nil
+	}
+
+	// 关闭UDC设备，写入换行符
+	err = g.Write(udcPath, "\n")
 	if err != nil {
 		return err
 	}
+	// 给控制器足够的时间重置
 	time.Sleep(3 * time.Second)
 	return nil
 }
 
 func (g *Gadget) Remove() error {
 	log.Printf("\n")
-	log.Printf("Removing old Gadget directory")
+	log.Printf("Gadget: Removing old Gadget directory")
 	log.Printf("======================================\n")
 
 	// 判断目录是否存在，不存在则跳过
 	if _, err := os.Stat(g.gadgetPath); os.IsNotExist(err) {
-		log.Printf("Removing Gadget root directory successfully")
+		log.Printf("Gadget: Removing Gadget root directory successfully")
 		log.Printf("======================================\n\n")
 		return nil
 	}
@@ -320,7 +340,7 @@ func (g *Gadget) Remove() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("UDC device closed successfully")
+	log.Printf("Gadget: UDC device closed successfully")
 
 	// 删除功能符号链接
 	profilePath := filepath.Join(g.gadgetPath, "configs/c.1")
@@ -332,13 +352,15 @@ func (g *Gadget) Remove() error {
 			}
 		}
 	}
-	log.Printf("Removing function symlinks successfully")
+	log.Printf("Gadget: Removing function symlinks successfully")
 
 	// 删除配置字符串目录
 	g.Rmdir(filepath.Join(profilePath, "strings/0x409"))
+	log.Printf("Gadget: Remove 'strings/0x409' directory successfully")
 
 	// 删除配置目录
 	g.Rmdir(profilePath)
+	log.Printf("Gadget: Removing '%s' directory successfully", "configs/c.1")
 
 	// 删除功能目录
 	funcsPath := filepath.Join(g.gadgetPath, "functions")
@@ -347,18 +369,18 @@ func (g *Gadget) Remove() error {
 		for _, entry := range entries {
 			if strings.HasPrefix(entry.Name(), "hid.usb") {
 				g.Rmdir(filepath.Join(funcsPath, entry.Name()))
+				log.Printf("Gadget: Remove '%s' directory successfully", entry.Name())
 			}
 		}
 	}
-	log.Printf("Removing function directories successfully")
 
 	// 删除设备字符串目录
 	g.Rmdir(filepath.Join(g.gadgetPath, "strings/0x409"))
-	log.Printf("Removing strings strings directory successfully")
+	log.Printf("Gadget: Remove 'strings/0x409' directory successfully")
 
 	// 删除Gadget目录
 	g.Rmdir(g.gadgetPath)
-	log.Printf("Removing Gadget root directory successfully")
+	log.Printf("Gadget: Removing Gadget root %s directory successfully", g.gadgetPath)
 	log.Printf("======================================\n\n")
 
 	return nil

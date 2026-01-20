@@ -7,13 +7,16 @@ import (
 )
 
 type KMInterface interface {
+	// 对外暴露的方法
 	AddKeyboard() error
-	AddMouse(absolute bool) error
+	AddMouse(absolute bool, horizontalWheel bool) error
+
+	// 内部方法，用于创建HID描述符
 	makeKeyboardHID(reportID *uint8) HID
-	makeMouseHID(absolute bool, reportID *uint8) HID
-	makeAbsoluteHID(reportID *uint8) HID
-	makeRelativeHID(reportID *uint8) HID
-	addHID(desc, name string, hid HID) error
+	makeMouseHID(absolute bool, horizontalWheel bool, reportID *uint8) HID
+	makeAbsoluteHID(horizontalWheel bool, reportID *uint8) HID
+	makeRelativeHID(horizontalWheel bool, reportID *uint8) HID
+	addHID(desc string, hid HID) error
 }
 
 // KM 定义HID鼠标和键盘设备结构
@@ -38,22 +41,20 @@ func NewKM(gadget GadgetInterface) KMInterface {
 
 // AddKeyboard 添加HID键盘功能
 func (k *KM) AddKeyboard() error {
-	return k.addHID("Keyboard", "kb", k.makeKeyboardHID(nil))
+	return k.addHID("Keyboard", k.makeKeyboardHID(nil))
 }
 
 // AddMouse 添加HID鼠标功能
-func (k *KM) AddMouse(absolute bool) error {
+func (k *KM) AddMouse(absolute bool, horizontalWheel bool) error {
 	desc := "Relative Mouse"
-	name := "mr"
 	if absolute {
 		desc = "Absolute Mouse"
-		name = "ma"
 	}
-	return k.addHID(desc, name, k.makeMouseHID(absolute, nil))
+	return k.addHID(desc, k.makeMouseHID(absolute, horizontalWheel, nil))
 }
 
 // addHID 添加HID功能
-func (k *KM) addHID(desc, name string, hid HID) error {
+func (k *KM) addHID(desc string, hid HID) error {
 	// 使用数字索引生成功能名称，格式为 hid.usbN
 	funcName := fmt.Sprintf("hid.usb%d", k.hidInstance)
 	funcPath, err := k.CreateFunction(funcName)
@@ -165,20 +166,17 @@ func (k *KM) makeKeyboardHID(reportID *uint8) HID {
 }
 
 // makeMouseHID 创建鼠标HID描述符
-func (k *KM) makeMouseHID(absolute bool, reportID *uint8) HID {
+func (k *KM) makeMouseHID(absolute bool, horizontalWheel bool, reportID *uint8) HID {
 	// 根据鼠标类型调用不同的创建函数
 	if absolute {
-		return k.makeAbsoluteHID(reportID)
+		return k.makeAbsoluteHID(horizontalWheel, reportID)
 	} else {
-		return k.makeRelativeHID(reportID)
+		return k.makeRelativeHID(horizontalWheel, reportID)
 	}
 }
 
 // makeAbsoluteHID 创建绝对鼠标HID描述符
-func (k *KM) makeAbsoluteHID(reportID *uint8) HID {
-	// 默认开启水平滚轮
-	horizontalWheel := true
-
+func (k *KM) makeAbsoluteHID(horizontalWheel bool, reportID *uint8) HID {
 	reportDescriptor := []byte{
 		// Mouse
 		0x05, 0x01, // USAGE_PAGE (Generic Desktop)
@@ -226,7 +224,7 @@ func (k *KM) makeAbsoluteHID(reportID *uint8) HID {
 		0x81, 0x06, // INPUT (Data,Var,Rel)
 	}...)
 
-	// 水平滚轮
+	// 添加水平滚轮描述符（如果支持）
 	if horizontalWheel {
 		reportDescriptor = append(reportDescriptor, []byte{
 			0x05, 0x0C, // USAGE_PAGE (Consumer Devices)
@@ -260,10 +258,7 @@ func (k *KM) makeAbsoluteHID(reportID *uint8) HID {
 }
 
 // makeRelativeHID 创建相对鼠标HID描述符
-func (k *KM) makeRelativeHID(reportID *uint8) HID {
-	// 默认开启水平滚轮
-	horizontalWheel := true
-
+func (k *KM) makeRelativeHID(horizontalWheel bool, reportID *uint8) HID {
 	reportDescriptor := []byte{
 		// Mouse
 		0x05, 0x01, // USAGE_PAGE (Generic Desktop)
@@ -306,7 +301,7 @@ func (k *KM) makeRelativeHID(reportID *uint8) HID {
 		0x81, 0x06, // INPUT (Data,Var,Rel)
 	}...)
 
-	// 水平滚轮
+	// 添加水平滚轮描述符（如果支持）
 	if horizontalWheel {
 		reportDescriptor = append(reportDescriptor, []byte{
 			0x05, 0x0C, // USAGE_PAGE (Consumer Devices)
