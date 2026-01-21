@@ -13,11 +13,10 @@ type MSDInterface interface {
 
 type MSD struct {
 	GadgetInterface
-	hidInstance int // 命名规范要求使用数字来索引HID实例
-	funcName    string
-	funcPath    string
-	cdrom       string
-	ro          string
+	funcName string
+	funcPath string
+	cdrom    string
+	ro       string
 }
 
 func NewMSD(gadget GadgetInterface) MSDInterface {

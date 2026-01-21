@@ -26,7 +26,7 @@ func (g *Gadget) addEthernet(start bool, driver, hostMAC, kvmMAC string) error {
 		return err
 	}
 
-	// 配置MAC地址
+	// 配置主机MAC地址
 	if hostMAC != "" {
 		err = g.write(filepath.Join(funcPath, "host_addr"), hostMAC, false)
 		if err != nil {

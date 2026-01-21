@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"opskvm/internal/conf"
+	"opskvm/internal/core/dhcp"
 	"opskvm/internal/core/files"
 	"opskvm/internal/core/hid"
 	"opskvm/internal/core/hid/ch9329"
@@ -26,6 +27,7 @@ type SvcContext struct {
 	Gadget   otgm.GadgetInterface
 	KMHID    hid.KMHIDController
 	MSD      otgm.MSDInterface
+	NET      otgm.NetInterface
 	Done     chan struct{} // 用于通知主程序中断信号已处理
 }
 
@@ -52,16 +54,19 @@ func New(ctx context.Context) *SvcContext {
 	// 初始OTG
 	s.initOTG()
 
+	// 启动服务中断处理
 	// 创建一个通道，用于通知主程序中断信号已处理
 	done := make(chan struct{})
-
-	// 启动服务中断处理
 	go s.handleInterrupt(s.Camera, s.Streamer, s.Gadget, done)
 
 	// 将通道存储在上下文中，以便主程序等待
 	s.Done = done
 
 	return s
+}
+
+func (s *SvcContext) initNet() {
+
 }
 
 func (s *SvcContext) initOTG() {
@@ -93,11 +98,21 @@ func (s *SvcContext) initOTG() {
 			panic(err)
 		}
 
-		// 添加大容量存储
-		s.MSD = otgm.NewMSD(s.Gadget)
-		if err := s.MSD.AddMSD(); err != nil {
+		// 添加大CD/DVD服务
+		// s.MSD = otgm.NewMSD(s.Gadget)
+		// if err := s.MSD.AddMSD(); err != nil {
+		// 	panic(err)
+		// }
+
+		// 添加网络功能
+		s.NET = otgm.NewNET(s.Gadget)
+		_, err = s.NET.AddNET()
+		if err != nil {
 			panic(err)
 		}
+
+		// 网卡用于启动DHCP服务器(后台启动)
+		go dhcp.Start("usb0")
 
 		// 启动USB Gadget服务
 		err = s.Gadget.StartUDC()
