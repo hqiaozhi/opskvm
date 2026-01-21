@@ -3,7 +3,8 @@ opskvm_app:
   opskvm_host: "0.0.0.0"
   opskvm_mode: "debug"
   opskvm_port: 8080
-  opskvm_video_path: "" # 空字符串表示自动检测
+  opskvm_video_path: "" # 空字符串表示自动检测（/dev/video0）
+  opskvm_ch9329_path: "" # 空字符串表示自动检测（/dev/ttyUSB0）
   opskvm_video_width: 1920
   opskvm_video_height: 1080
   opskvm_video_fps: 30

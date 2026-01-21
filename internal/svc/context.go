@@ -25,6 +25,7 @@ type SvcContext struct {
 	JWT      *jwt.JwtService
 	Gadget   otgm.GadgetInterface
 	KMHID    hid.KMHIDController
+	MSD      otgm.MSDInterface
 	Done     chan struct{} // 用于通知主程序中断信号已处理
 }
 
@@ -48,8 +49,8 @@ func New(ctx context.Context) *SvcContext {
 	jwt := jwt.New(&s.Conf.JWT)
 	s.JWT = jwt
 
-	// 初始化键盘和鼠标控制器
-	s.initHID()
+	// 初始OTG
+	s.initOTG()
 
 	// 创建一个通道，用于通知主程序中断信号已处理
 	done := make(chan struct{})
@@ -63,7 +64,7 @@ func New(ctx context.Context) *SvcContext {
 	return s
 }
 
-func (s *SvcContext) initHID() {
+func (s *SvcContext) initOTG() {
 	// 获取键盘和鼠标控制器
 	switch s.Conf.App.KMhidMode {
 	case "otg":
@@ -92,6 +93,12 @@ func (s *SvcContext) initHID() {
 			panic(err)
 		}
 
+		// 添加大容量存储
+		s.MSD = otgm.NewMSD(s.Gadget)
+		if err := s.MSD.AddMSD(); err != nil {
+			panic(err)
+		}
+
 		// 启动USB Gadget服务
 		err = s.Gadget.StartUDC()
 		if err != nil {
@@ -104,7 +111,7 @@ func (s *SvcContext) initHID() {
 			log.Printf("Failed to open OTG HID: %v", err)
 		}
 	case "ch9329":
-		s.KMHID = ch9329.NewCH9329()
+		s.KMHID = ch9329.NewCH9329(s.Conf.App.Ch9329Path)
 		s.KMHID.SetAbsoluteMouse(true)
 		if err := s.KMHID.Open(); err != nil {
 			log.Printf("Failed to open CH9329: %v", err)
@@ -181,8 +188,6 @@ func (s *SvcContext) handleInterrupt(camera video.Camera, streamer video.Streame
 
 	log.Println("Stopping server...")
 	// 移除旧的Gadget目录
-	log.Println("Removing old Gadget directory")
-	log.Println("======================================")
 	if gadget != nil {
 		if err := gadget.Remove(); err != nil {
 			log.Printf("Error removing Gadget: %v", err)

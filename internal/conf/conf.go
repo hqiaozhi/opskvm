@@ -30,6 +30,7 @@ type AppConfig struct {
 	Port               int           `mapstructure:"opskvm_port"`
 	Mode               string        `mapstructure:"opskvm_mode"`                 // 运行模式（debug/release/test）
 	VideoPath          string        `mapstructure:"opskvm_video_path"`           // 视频设备路径（默认/dev/video0）
+	Ch9329Path         string        `mapstructure:"opskvm_ch9329_path"`          // 键盘鼠标设备路径（默认/dev/ttyUSB0）
 	VideoWidth         int           `mapstructure:"opskvm_video_width"`          // 视频宽度（默认1920）
 	VideoHeight        int           `mapstructure:"opskvm_video_height"`         // 视频高度（默认1080）
 	VideoFPS           int           `mapstructure:"opskvm_video_fps"`            // 视频帧率（默认30）

@@ -25,7 +25,7 @@ func Test_KM(t *testing.T) {
 	}
 
 	// 创建CH9329设备实例
-	hidDev := NewCH9329()
+	hidDev := NewCH9329("/dev/ttyUSB0")
 	defer hidDev.Close()
 
 	// 打开第一个可用串口（实际使用时请根据需要选择正确的串口）

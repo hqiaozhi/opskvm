@@ -2,6 +2,7 @@ package ch9329
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"go.bug.st/serial"
@@ -16,36 +17,38 @@ const (
 
 // CH9329Device 实现HIDDevice接口
 type CH9329Device struct {
-	port          serial.Port
-	absolute      bool
-	ledState      byte
-	modifiers     byte        // 键盘修饰键状态
-	activeKeys    []byte      // 活动按键列表（最多6个）
-	mouseButtons  byte        // 鼠标按键状态
-	mouseX        int         // 鼠标X坐标（绝对模式）
-	mouseY        int         // 鼠标Y坐标（绝对模式）
-	mouseDeltaX   int         // 鼠标X增量（相对模式）
-	mouseDeltaY   int         // 鼠标Y增量（相对模式）
-	mouseWheel    int8        // 鼠标滚轮状态
+	devicePath   string
+	port         serial.Port
+	absolute     bool
+	ledState     byte
+	modifiers    byte   // 键盘修饰键状态
+	activeKeys   []byte // 活动按键列表（最多6个）
+	mouseButtons byte   // 鼠标按键状态
+	mouseX       int    // 鼠标X坐标（绝对模式）
+	mouseY       int    // 鼠标Y坐标（绝对模式）
+	mouseDeltaX  int    // 鼠标X增量（相对模式）
+	mouseDeltaY  int    // 鼠标Y增量（相对模式）
+	mouseWheel   int8   // 鼠标滚轮状态
 }
 
 // NewCH9329Device 创建新的CH9329设备实例
-func NewCH9329() *CH9329Device {
+func NewCH9329(devicePath string) *CH9329Device {
 	return &CH9329Device{
-		absolute:     true, // 默认使用绝对鼠标模式，与Python版本一致
-		ledState:     0,    // 初始LED状态
-		modifiers:    0,    // 初始修饰键状态
+		devicePath:   devicePath,
+		absolute:     true,               // 默认使用绝对鼠标模式
+		ledState:     0,                  // 初始LED状态
+		modifiers:    0,                  // 初始修饰键状态
 		activeKeys:   make([]byte, 0, 6), // 初始活动按键列表，最多6个
-		mouseButtons: 0,    // 初始鼠标按键状态
-		mouseX:       0,    // 初始鼠标X坐标
-		mouseY:       0,    // 初始鼠标Y坐标
-		mouseDeltaX:  0,    // 初始鼠标X增量
-		mouseDeltaY:  0,    // 初始鼠标Y增量
-		mouseWheel:   0,    // 初始鼠标滚轮状态
+		mouseButtons: 0,                  // 初始鼠标按键状态
+		mouseX:       0,                  // 初始鼠标X坐标
+		mouseY:       0,                  // 初始鼠标Y坐标
+		mouseDeltaX:  0,                  // 初始鼠标X增量
+		mouseDeltaY:  0,                  // 初始鼠标Y增量
+		mouseWheel:   0,                  // 初始鼠标滚轮状态
 	}
 }
 
-// calculateChecksum 计算校验和，与Python版本一致
+// calculateChecksum 计算校验和
 func (d *CH9329Device) calculateChecksum(data []byte) byte {
 	var sum int
 	for _, b := range data {
@@ -143,11 +146,32 @@ func (d *CH9329Device) receiveResponse() error {
 
 // Open 打开串口连接（实现hid.KMHIDController接口）
 func (d *CH9329Device) Open() error {
-	// 默认参数，与Python版本一致
-	return d.OpenWithParams("/dev/ttyUSB0", 9600)
+	// 默认参数
+	if d.devicePath == "" {
+		matches, err := d.findTTYUSBPort()
+		if err != nil {
+			return err
+		}
+		if len(matches) > 0 {
+			d.devicePath = matches[0]
+		} else {
+			return fmt.Errorf("no ttyUSB device found")
+		}
+	}
+	return d.OpenWithParams(d.devicePath, 9600)
 }
 
-// OpenWithParams 打开串口连接（带参数的版本）
+// FindTTYUSBPort 查找系统中所有 /dev/ttyUSB* 格式的串口设备
+func (d *CH9329Device) findTTYUSBPort() ([]string, error) {
+	// 直接匹配 /dev/ttyUSB 开头的所有设备文件
+	matches, err := filepath.Glob("/dev/ttyUSB*")
+	if err != nil {
+		return nil, fmt.Errorf("查找串口设备失败: %v", err)
+	}
+	return matches, nil
+}
+
+// OpenWithParams 打开串口连接
 func (d *CH9329Device) OpenWithParams(portName string, baudRate int) error {
 	mode := &serial.Mode{
 		BaudRate: baudRate,
@@ -162,7 +186,7 @@ func (d *CH9329Device) OpenWithParams(portName string, baudRate int) error {
 	}
 	d.port = port
 
-	// 初始化CH9329设备，发送重置命令，与Python版本一致
+	// 初始化CH9329设备，发送重置命令
 	// RESET = [0x00,0x0F,0x00]
 	resetCmd := []byte{0x00, 0x0F, 0x00}
 	if err := d.sendCommand(resetCmd); err != nil {

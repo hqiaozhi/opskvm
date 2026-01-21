@@ -347,7 +347,7 @@ func (g *Gadget) Remove() error {
 	entries, err := os.ReadDir(profilePath)
 	if err == nil {
 		for _, entry := range entries {
-			if strings.HasPrefix(entry.Name(), "hid") {
+			if entry.IsDir() && strings.Contains(entry.Name(), "usb") {
 				g.Unlink(filepath.Join(profilePath, entry.Name()))
 			}
 		}
