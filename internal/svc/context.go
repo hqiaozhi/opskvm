@@ -32,11 +32,87 @@ func New(ctx context.Context) *SvcContext {
 	s := &SvcContext{}
 
 	// 加载配置
-	config, v, _ := conf.New()
-	config.WatchConfigChanges(v)
-	s.Conf = config
+	s.loadConfig()
 
 	// 初始化文件服务
+	s.initFiles()
+
+	// 初始化视频服务
+	s.initVideo()
+
+	// 响应
+	R := resp.New()
+	s.RESP = R
+
+	// 初始化JWT服务
+	jwt := jwt.New(&s.Conf.JWT)
+	s.JWT = jwt
+
+	// 初始化键盘和鼠标控制器
+	s.initHID()
+
+	// 创建一个通道，用于通知主程序中断信号已处理
+	done := make(chan struct{})
+
+	// 启动服务中断处理
+	go s.handleInterrupt(s.Camera, s.Streamer, s.Gadget, done)
+
+	// 将通道存储在上下文中，以便主程序等待
+	s.Done = done
+
+	return s
+}
+
+func (s *SvcContext) initHID() {
+	// 获取键盘和鼠标控制器
+	switch s.Conf.App.KMhidMode {
+	case "otg":
+		// 初始化USB Gadget服务
+		udcName, err := otgm.FindUDC()
+		if err != nil {
+			panic(err)
+		}
+		s.Gadget = otgm.New(s.Conf.App.Name, udcName)
+		_, err = s.Gadget.InitConfig()
+		if err != nil {
+			panic(err)
+		}
+
+		// 初始化键盘和鼠标
+		km := otgm.NewKM(s.Gadget)
+		if err := km.AddKeyboard(); err != nil {
+			panic(err)
+		}
+		// 鼠标绝对模式（先创建，占用/dev/hidg1）
+		if err := km.AddMouse(true, false); err != nil {
+			panic(err)
+		}
+		// 鼠标相对模式（后创建，占用/dev/hidg2）
+		if err := km.AddMouse(false, false); err != nil {
+			panic(err)
+		}
+
+		// 启动USB Gadget服务
+		err = s.Gadget.StartUDC()
+		if err != nil {
+			panic(err)
+		}
+
+		s.KMHID = otgm.NewOTGKMHIDControl()
+		s.KMHID.SetAbsoluteMouse(true) // 与CH9329保持一致，默认使用绝对鼠标模式
+		if err := s.KMHID.Open(); err != nil {
+			log.Printf("Failed to open OTG HID: %v", err)
+		}
+	case "ch9329":
+		s.KMHID = ch9329.NewCH9329()
+		s.KMHID.SetAbsoluteMouse(true)
+		if err := s.KMHID.Open(); err != nil {
+			log.Printf("Failed to open CH9329: %v", err)
+		}
+	}
+}
+
+func (s *SvcContext) initFiles() {
 	// 判断目录是否存在，不存在则创建
 	path := "/opt/opskvm"
 	f, err := files.New(path)
@@ -44,8 +120,10 @@ func New(ctx context.Context) *SvcContext {
 		panic(err)
 	}
 	s.Files = f
+}
 
-	// 初始化视频服务
+// 初始化视频服务
+func (s *SvcContext) initVideo() {
 	camera := video.NewV4LCamera()
 	if err := camera.Open(s.Conf.App.VideoPath); err != nil {
 		panic(err)
@@ -86,75 +164,17 @@ func New(ctx context.Context) *SvcContext {
 			s.Streamer.Broadcast(frame)
 		}
 	}()
+}
 
-	// 响应
-	R := resp.New()
-	s.RESP = R
-
-	// 初始化JWT服务
-	jwt := jwt.New(&config.JWT)
-	s.JWT = jwt
-
-	// 初始化USB Gadget服务
-	udcName, err := otgm.FindUDC()
-	if err != nil {
-		panic(err)
-	}
-	s.Gadget = otgm.New(s.Conf.App.Name, udcName)
-	_, err = s.Gadget.InitConfig()
-	if err != nil {
-		panic(err)
-	}
-
-	// 初始化键盘和鼠标
-	km := otgm.NewKM(s.Gadget)
-	if err := km.AddKeyboard(); err != nil {
-		panic(err)
-	}
-	// 鼠标绝对模式（先创建，占用/dev/hidg1）
-	if err := km.AddMouse(true, false); err != nil {
-		panic(err)
-	}
-	// 鼠标相对模式（后创建，占用/dev/hidg2）
-	if err := km.AddMouse(false, false); err != nil {
-		panic(err)
-	}
-
-	// 启动USB Gadget服务
-	err = s.Gadget.StartUDC()
-	if err != nil {
-		panic(err)
-	}
-
-	// 创建一个通道，用于通知主程序中断信号已处理
-	done := make(chan struct{})
-
-	// 启动服务中断处理
-	go handleInterrupt(s.Camera, s.Streamer, s.Gadget, done)
-
-	// 获取键盘和鼠标控制器
-	switch s.Conf.App.KMhidMode {
-	case "otg":
-		s.KMHID = otgm.NewOTGKMHIDControl()
-		if err := s.KMHID.Open(); err != nil {
-			log.Printf("Failed to open OTG HID: %v", err)
-		}
-	case "ch9329":
-		s.KMHID = ch9329.NewCH9329()
-		s.KMHID.SetAbsoluteMouse(true)
-		if err := s.KMHID.Open(); err != nil {
-			log.Printf("Failed to open CH9329: %v", err)
-		}
-	}
-
-	// 将通道存储在上下文中，以便主程序等待
-	s.Done = done
-
-	return s
+// 加载配置
+func (s *SvcContext) loadConfig() {
+	config, v, _ := conf.New()
+	config.WatchConfigChanges(v)
+	s.Conf = config
 }
 
 // handleInterrupt 处理中断信号
-func handleInterrupt(camera video.Camera, streamer video.Streamer, gadget otgm.GadgetInterface, done chan struct{}) {
+func (s *SvcContext) handleInterrupt(camera video.Camera, streamer video.Streamer, gadget otgm.GadgetInterface, done chan struct{}) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
 	<-ch
@@ -163,8 +183,10 @@ func handleInterrupt(camera video.Camera, streamer video.Streamer, gadget otgm.G
 	// 移除旧的Gadget目录
 	log.Println("Removing old Gadget directory")
 	log.Println("======================================")
-	if err := gadget.Remove(); err != nil {
-		log.Printf("Error removing Gadget: %v", err)
+	if gadget != nil {
+		if err := gadget.Remove(); err != nil {
+			log.Printf("Error removing Gadget: %v", err)
+		}
 	}
 	// 停止流分发器
 	streamer.Stop()

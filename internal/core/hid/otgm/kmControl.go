@@ -202,6 +202,12 @@ func NewOTGKMHIDControl() hid.KMHIDController {
 // SetAbsoluteMouse 设置鼠标是否使用绝对模式
 func (d *OTGKMHIDControl) SetAbsoluteMouse(absolute bool) error {
 	log.Printf("OTG: Setting absolute mouse mode to: %v", absolute)
+	// 切换模式时重置鼠标状态，避免上一次的状态影响新的模式
+	d.mouseDeltaX = 0
+	d.mouseDeltaY = 0
+	d.mouseX = 0
+	d.mouseY = 0
+	d.mouseWheel = 0
 	d.absolute = absolute
 	return nil
 }
@@ -391,9 +397,13 @@ func (d *OTGKMHIDControl) SendKeyboardReport(modifier byte, keys []byte) error {
 
 // sendMouseReportInternal 内部方法：发送鼠标HID报告，根据内部绝对模式标志选择相对或绝对
 func (d *OTGKMHIDControl) sendMouseReportInternal(buttons byte, dx, dy int, wheelY int8) error {
-	// 检查设备是否已打开
+	// 检查设备是否已打开，如果未打开则尝试打开
 	if !d.isOpen {
-		return fmt.Errorf("device not open")
+		log.Printf("Device not open, attempting to open...")
+		if err := d.open(); err != nil {
+			log.Printf("Failed to open devices: %v", err)
+			return nil
+		}
 	}
 
 	log.Printf("Sending mouse report: internal_absolute=%v, buttons=0x%02x, dx=%d, dy=%d, wheelY=%d", d.absolute, buttons, dx, dy, wheelY)
@@ -405,19 +415,6 @@ func (d *OTGKMHIDControl) sendMouseReportInternal(buttons byte, dx, dy int, whee
 
 // SendMouseReport 实现KMHIDController接口的SendMouseReport方法
 func (d *OTGKMHIDControl) SendMouseReport(buttons byte, dx, dy int, wheel int8) error {
-	// 自动检测并切换鼠标模式：如果dx和dy在绝对坐标范围内（0-65535），切换到绝对模式
-	if (dx >= 0 && dx <= 65535) && (dy >= 0 && dy <= 65535) {
-		if !d.absolute {
-			log.Printf("Auto-switching to absolute mouse mode based on coordinate range")
-			d.SetAbsoluteMouse(true)
-		}
-	} else {
-		if d.absolute {
-			log.Printf("Auto-switching to relative mouse mode based on coordinate range")
-			d.SetAbsoluteMouse(false)
-		}
-	}
-
 	// 调用内部方法，传入当前的absolute状态，wheelY=wheel
 	return d.sendMouseReportInternal(buttons, dx, dy, wheel)
 }
@@ -449,32 +446,69 @@ func (d *OTGKMHIDControl) SendRelativeMouseReport(buttons byte, dx, dy int, whee
 	// 第2字节：X轴增量
 	// 第3字节：Y轴增量
 	// 第4字节：垂直滚轮增量
-	// 限制dx和dy在-127到127范围内
-	reldx := int8(dx)
-	if reldx < -127 {
-		reldx = -127
+	// 确保dx和dy在-127到127范围内
+	relDx := dx
+	relDy := dy
+
+	// 确保增量在有效范围内
+	if relDx < -127 {
+		relDx = -127
 	}
-	if reldx > 127 {
-		reldx = 127
+	if relDx > 127 {
+		relDx = 127
+	}
+	if relDy < -127 {
+		relDy = -127
+	}
+	if relDy > 127 {
+		relDy = 127
 	}
 
-	reldy := int8(dy)
-	if reldy < -127 {
-		reldy = -127
+	// 灵敏度调整：除以3并向上取整
+	if relDx > 0 {
+		relDx = (relDx + 2) / 3
+	} else if relDx < 0 {
+		relDx = -((-relDx + 2) / 3)
 	}
-	if reldy > 127 {
-		reldy = 127
+
+	if relDy > 0 {
+		relDy = (relDy + 2) / 3
+	} else if relDy < 0 {
+		relDy = -((-relDy + 2) / 3)
+	}
+
+	// 正确处理负值，转换为无符号字节表示
+	adjustedDx := byte(0)
+	if relDx > 0 {
+		adjustedDx = byte(relDx)
+	} else if relDx < 0 {
+		adjustedDx = byte(255 + relDx) // 负值转换为无符号字节
+	}
+
+	adjustedDy := byte(0)
+	if relDy > 0 {
+		adjustedDy = byte(relDy)
+	} else if relDy < 0 {
+		adjustedDy = byte(255 + relDy) // 负值转换为无符号字节
+	}
+
+	// 调整滚轮：1表示向上，255表示向下，0表示不动
+	adjustedWheel := byte(0)
+	if wheelY > 0 {
+		adjustedWheel = 1
+	} else if wheelY < 0 {
+		adjustedWheel = 255
 	}
 
 	report := make([]byte, 4)
 	report[0] = buttons
-	report[1] = byte(reldx)  // 在相对模式下，dx是相对增量，直接转换为byte
-	report[2] = byte(reldy)  // 在相对模式下，dy是相对增量，直接转换为byte
-	report[3] = byte(wheelY) // 垂直滚轮增量
+	report[1] = adjustedDx    // 调整后的X增量
+	report[2] = adjustedDy    // 调整后的Y增量
+	report[3] = adjustedWheel // 调整后的滚轮增量
 
 	log.Printf("Sending relative mouse report: report=%v", report)
 
-	// 写入相对鼠标设备文件 (/dev/hidg1)
+	// 写入相对鼠标设备文件 (/dev/hidg2)
 	_, err := d.relativeMouseDev.Write(report)
 	if err != nil {
 		log.Printf("Failed to write relative mouse report: %v, attempting to reconnect...", err)
@@ -532,44 +566,40 @@ func (d *OTGKMHIDControl) SendAbsoluteMouseReport(buttons byte, x, y int, wheelY
 	// 第2-3字节：X轴绝对坐标（16位）
 	// 第4-5字节：Y轴绝对坐标（16位）
 	// 第6字节：垂直滚轮增量
-	// 归一化计算：处理客户端发送的坐标
-	// 检查客户端发送的坐标范围：
-	// 如果x在0-65535范围内，直接使用
-	// 否则，将-32768-32767范围转换为0-65535范围
-	var absX, absY int
-	if x >= 0 && x <= 65535 {
-		// 客户端发送的是0-65535范围的绝对坐标，直接使用
-		absX = x
-		absY = y
-	} else {
-		// 客户端发送的是-32768-32767范围的绝对坐标，转换为0-65535范围
-		absX = x + 32768
-		absY = y + 32768
+	// 确保坐标在0-65535范围内
+	if x < 0 {
+		x = 0
 	}
-	if absX < 0 {
-		absX = 0
+	if x > 65535 {
+		x = 65535
 	}
-	if absX > 65535 {
-		absX = 65535
+	if y < 0 {
+		y = 0
 	}
-	if absY < 0 {
-		absY = 0
-	}
-	if absY > 65535 {
-		absY = 65535
+	if y > 65535 {
+		y = 65535
 	}
 
+	// 与CH9329保持一致：调整滚轮，1表示向上，255表示向下，0表示不动
+	adjustedWheel := byte(0)
+	if wheelY > 0 {
+		adjustedWheel = 1
+	} else if wheelY < 0 {
+		adjustedWheel = 255
+	}
+
+	// 移除除以8的坐标调整，直接使用原始坐标，因为前端已经处理了归一化坐标
 	report := make([]byte, 6)
 	report[0] = buttons
-	report[1] = byte(absX & 0xFF) // X坐标低字节
-	report[2] = byte(absX >> 8)   // X坐标高字节
-	report[3] = byte(absY & 0xFF) // Y坐标低字节
-	report[4] = byte(absY >> 8)   // Y坐标高字节
-	report[5] = byte(wheelY)      // 垂直滚轮增量
+	report[1] = byte(x & 0xFF) // X坐标低字节
+	report[2] = byte(x >> 8)   // X坐标高字节
+	report[3] = byte(y & 0xFF) // Y坐标低字节
+	report[4] = byte(y >> 8)   // Y坐标高字节
+	report[5] = adjustedWheel  // 调整后的滚轮增量
 
-	log.Printf("Sending absolute mouse report: x=%d, y=%d, absX=%d, absY=%d, report=%v", x, y, absX, absY, report)
+	log.Printf("Sending absolute mouse report: x=%d, y=%d, report=%v", x, y, report)
 
-	// 写入绝对鼠标设备文件 (/dev/hidg2)
+	// 写入绝对鼠标设备文件 (/dev/hidg1)
 	_, err := d.absoluteMouseDev.Write(report)
 	if err != nil {
 		log.Printf("Failed to write absolute mouse report: %v, attempting to reconnect...", err)
@@ -936,8 +966,6 @@ func (d *OTGKMHIDControl) TypeString(s string) error {
 			key = KeyBackslash
 		case ':':
 			key = KeySemicolon
-		case '"':
-			key = KeyApostrophe
 		case '~':
 			key = KeyGrave
 		case '<':
@@ -948,8 +976,153 @@ func (d *OTGKMHIDControl) TypeString(s string) error {
 			key = KeySlash
 		case ' ':
 			key = KeySpace
+		case '·':
+			key = KeyGrave
+		case '\t':
+			key = KeyTab
 		case '\n':
 			key = KeyEnter
+		// 全角英文字母
+		case 'ａ', 'Ａ':
+			key = KeyA
+		case 'ｂ', 'Ｂ':
+			key = KeyB
+		case 'ｃ', 'Ｃ':
+			key = KeyC
+		case 'ｄ', 'Ｄ':
+			key = KeyD
+		case 'ｅ', 'Ｅ':
+			key = KeyE
+		case 'ｆ', 'Ｆ':
+			key = KeyF
+		case 'ｇ', 'Ｇ':
+			key = KeyG
+		case 'ｈ', 'Ｈ':
+			key = KeyH
+		case 'ｉ', 'Ｉ':
+			key = KeyI
+		case 'ｊ', 'Ｊ':
+			key = KeyJ
+		case 'ｋ', 'Ｋ':
+			key = KeyK
+		case 'ｌ', 'Ｌ':
+			key = KeyL
+		case 'ｍ', 'Ｍ':
+			key = KeyM
+		case 'ｎ', 'Ｎ':
+			key = KeyN
+		case 'ｏ', 'Ｏ':
+			key = KeyO
+		case 'ｐ', 'Ｐ':
+			key = KeyP
+		case 'ｑ', 'Ｑ':
+			key = KeyQ
+		case 'ｒ', 'Ｒ':
+			key = KeyR
+		case 'ｓ', 'Ｓ':
+			key = KeyS
+		case 'ｔ', 'Ｔ':
+			key = KeyT
+		case 'ｕ', 'Ｕ':
+			key = KeyU
+		case 'ｖ', 'Ｖ':
+			key = KeyV
+		case 'ｗ', 'Ｗ':
+			key = KeyW
+		case 'ｘ', 'Ｘ':
+			key = KeyX
+		case 'ｙ', 'Ｙ':
+			key = KeyY
+		case 'ｚ', 'Ｚ':
+			key = KeyZ
+		// 全角数字
+		case '１':
+			key = Key1
+		case '２':
+			key = Key2
+		case '３':
+			key = Key3
+		case '４':
+			key = Key4
+		case '５':
+			key = Key5
+		case '６':
+			key = Key6
+		case '７':
+			key = Key7
+		case '８':
+			key = Key8
+		case '９':
+			key = Key9
+		case '０':
+			key = Key0
+		// 全角符号
+		case '－':
+			key = KeyMinus
+		case '＝':
+			key = KeyEqual
+		case '［':
+			key = KeyLeftBrace
+		case '］':
+			key = KeyRightBrace
+		case '＼':
+			key = KeyBackslash
+		case '；':
+			key = KeySemicolon
+		case '＇':
+			key = KeyApostrophe
+		case '｀':
+			key = KeyGrave
+		case '，':
+			key = KeyComma
+		case '．':
+			key = KeyDot
+		case '／':
+			key = KeySlash
+		case '！':
+			key = Key1
+		case '＠':
+			key = Key2
+		case '＃':
+			key = Key3
+		case '＄':
+			key = Key4
+		case '％':
+			key = Key5
+		case '＾':
+			key = Key6
+		case '＆':
+			key = Key7
+		case '＊':
+			key = Key8
+		case '（':
+			key = Key9
+		case '）':
+			key = Key0
+		case '＿':
+			key = KeyMinus
+		case '＋':
+			key = KeyEqual
+		case '｛':
+			key = KeyLeftBrace
+		case '｝':
+			key = KeyRightBrace
+		case '｜':
+			key = KeyBackslash
+		case '：':
+			key = KeySemicolon
+		case '＂':
+			key = KeyApostrophe
+		case '～':
+			key = KeyGrave
+		case '＜':
+			key = KeyComma
+		case '＞':
+			key = KeyDot
+		case '？':
+			key = KeySlash
+		case '　':
+			key = KeySpace
 		default:
 			// 忽略不支持的字符
 			continue
@@ -961,7 +1134,8 @@ func (d *OTGKMHIDControl) TypeString(s string) error {
 		}
 		// 需要Shift键的符号
 		switch c {
-		case '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '{', '}', '|', ':', '"', '~', '<', '>', '?':
+		case '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '{', '}', '|', ':', '"', '~', '<', '>', '?',
+			'！', '＠', '＃', '＄', '％', '＾', '＆', '＊', '（', '）', '＿', '＋', '｛', '｝', '｜', '：', '＂', '～', '＜', '＞', '？':
 			modifier = ModifierLeftShift
 		}
 
