@@ -1,4 +1,4 @@
-package otgm
+package otg
 
 import (
 	"fmt"

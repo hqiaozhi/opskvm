@@ -1,36 +1,80 @@
 package otg
 
 import (
-	"fmt"
+	"errors"
+	"path/filepath"
 )
 
-// addMSD 添加MSD功能
-// 初始化之后 对端被识别大小为0的光驱
-func (g *Gadget) addMSD(start bool) error {
-	eps := 3
+type MSDInterface interface {
+	AddMSD() error
+	Bind(absoltePath, cdrom string) error
+	Remove() error
+}
 
-	// 处理驱动程序
-	realDriver := "mass_storage"
+type MSD struct {
+	GadgetInterface
+	funcName string
+	funcPath string
+	cdrom    string
+	ro       string
+}
 
-	funcName := fmt.Sprintf("%s.usb0", realDriver)
-	_, err := g.createFunction(funcName)
+func NewMSD(gadget GadgetInterface) MSDInterface {
+	return &MSD{
+		GadgetInterface: gadget,
+	}
+}
+
+// AddMSD 创建功能
+func (m *MSD) AddMSD() error {
+	m.funcName = "mass_storage.usb0"
+	path, err := m.CreateFunction(m.funcName)
 	if err != nil {
 		return err
 	}
+	m.funcPath = path
 
-	// 启动功能
-	if start {
-		err = g.startFunction(funcName, eps)
-		if err != nil {
-			return err
-		}
-	}
-
-	// 创建元数据
-	err = g.createMeta(funcName, "Mass Storage", eps)
+	err = m.StartFunction(m.funcName)
 	if err != nil {
 		return err
 	}
-
 	return nil
+}
+
+// Bind 绑定镜像
+func (m *MSD) Bind(absoltePath, cdrom string) error {
+	// cdrom = 0 磁盘(flash) 可读可写
+	// cdrom = 1 光驱(cd/dvd) 只读
+	switch cdrom {
+	case "0":
+		m.ro = "0" // 可写
+	case "1":
+		m.ro = "1" // 只读
+	default:
+		return errors.New("not surpported cdrom value")
+	}
+
+	// 写入配置
+	path1 := filepath.Join(m.funcPath, "lun.0/cdrom")
+	err := m.Write(path1, m.cdrom)
+	if err != nil {
+		return err
+	}
+	path2 := filepath.Join(m.funcPath, "lun.0/ro")
+	err = m.Write(path2, m.ro)
+	if err != nil {
+		return err
+	}
+	path3 := filepath.Join(m.funcPath, "lun.0/file")
+	err = m.Write(path3, absoltePath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Remove 移除绑定
+func (m *MSD) Remove() error {
+	path := filepath.Join(m.funcPath, "lun.0/file")
+	return m.Write(path, "\n")
 }

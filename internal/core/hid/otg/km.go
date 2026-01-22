@@ -6,75 +6,102 @@ import (
 	"strconv"
 )
 
-// addKeyboard 添加HID键盘功能
-func (g *Gadget) addKeyboard(start bool, remoteWakeup bool) error {
-	return g.addHID("Keyboard", start, remoteWakeup, makeKeyboardHID(nil))
+type KMInterface interface {
+	// 对外暴露的方法
+	AddKeyboard() error
+	AddMouse(absolute bool, horizontalWheel bool) error
+
+	// 内部方法，用于创建HID描述符
+	makeKeyboardHID(reportID *uint8) HID
+	makeMouseHID(absolute bool, horizontalWheel bool, reportID *uint8) HID
+	makeAbsoluteHID(horizontalWheel bool, reportID *uint8) HID
+	makeRelativeHID(horizontalWheel bool, reportID *uint8) HID
+	addHID(desc string, hid HID) error
 }
 
-// addMouse 添加HID鼠标功能
-func (g *Gadget) addMouse(start bool, remoteWakeup bool, absolute bool, horizontalWheel bool) error {
+// KM 定义HID鼠标和键盘设备结构
+type KM struct {
+	GadgetInterface
+	hidInstance int // 命名规范要求使用数字来索引HID实例
+}
+
+type HID struct {
+	Protocol         int    `json:"protocol"`
+	Subclass         int    `json:"subclass"`
+	ReportLength     int    `json:"report_length"`
+	ReportDescriptor []byte `json:"report_descriptor"`
+}
+
+func NewKM(gadget GadgetInterface) KMInterface {
+	return &KM{
+		GadgetInterface: gadget,
+		hidInstance:     0,
+	}
+}
+
+// AddKeyboard 添加HID键盘功能
+func (k *KM) AddKeyboard() error {
+	return k.addHID("Keyboard", k.makeKeyboardHID(nil))
+}
+
+// AddMouse 添加HID鼠标功能
+func (k *KM) AddMouse(absolute bool, horizontalWheel bool) error {
 	desc := "Relative Mouse"
 	if absolute {
 		desc = "Absolute Mouse"
 	}
-	return g.addHID(desc, start, remoteWakeup, makeMouseHID(absolute, horizontalWheel, nil))
+	return k.addHID(desc, k.makeMouseHID(absolute, horizontalWheel, nil))
 }
 
 // addHID 添加HID功能
-func (g *Gadget) addHID(desc string, start bool, remoteWakeup bool, hid Hid) error {
-	eps := 1
-	funcName := fmt.Sprintf("hid.usb%d", g.hidInstance)
-	funcPath, err := g.createFunction(funcName)
+func (k *KM) addHID(desc string, hid HID) error {
+	// 使用数字索引生成功能名称，格式为 hid.usbN
+	funcName := fmt.Sprintf("hid.usb%d", k.hidInstance)
+	funcPath, err := k.CreateFunction(funcName)
 	if err != nil {
 		return err
 	}
 
 	// 写入HID配置
-	err = g.write(filepath.Join(funcPath, "no_out_endpoint"), "1", true)
+	err = k.Write(filepath.Join(funcPath, "no_out_endpoint"), "1")
 	if err != nil {
 		return err
 	}
 
-	err = g.write(filepath.Join(funcPath, "protocol"), strconv.Itoa(hid.Protocol), false)
+	err = k.Write(filepath.Join(funcPath, "protocol"), strconv.Itoa(hid.Protocol))
 	if err != nil {
 		return err
 	}
 
-	err = g.write(filepath.Join(funcPath, "subclass"), strconv.Itoa(hid.Subclass), false)
+	err = k.Write(filepath.Join(funcPath, "subclass"), strconv.Itoa(hid.Subclass))
 	if err != nil {
 		return err
 	}
 
-	err = g.write(filepath.Join(funcPath, "report_length"), strconv.Itoa(hid.ReportLength), false)
+	err = k.Write(filepath.Join(funcPath, "report_length"), strconv.Itoa(hid.ReportLength))
 	if err != nil {
 		return err
 	}
 
-	err = g.writeBytes(filepath.Join(funcPath, "report_desc"), hid.ReportDescriptor)
+	err = k.WriteBytes(filepath.Join(funcPath, "report_desc"), hid.ReportDescriptor)
 	if err != nil {
 		return err
 	}
 
 	// 启动功能
-	if start {
-		err = g.startFunction(funcName, eps)
-		if err != nil {
-			return err
-		}
-	}
-
-	// 创建元数据
-	err = g.createMeta(funcName, desc, eps)
+	err = k.StartFunction(funcName)
 	if err != nil {
 		return err
 	}
 
-	g.hidInstance++
+	// 增加实例计数
+	k.hidInstance++
+
 	return nil
 }
 
 // makeKeyboardHID 创建键盘HID描述符
-func makeKeyboardHID(reportID *uint8) Hid {
+func (k *KM) makeKeyboardHID(reportID *uint8) HID {
 	reportDescriptor := []byte{
 		// Keyboard
 		0x05, 0x01, // USAGE_PAGE (Generic Desktop)
@@ -130,7 +157,7 @@ func makeKeyboardHID(reportID *uint8) Hid {
 		0xC0, // END_COLLECTION
 	}...)
 
-	return Hid{
+	return HID{
 		Protocol:         1, // Keyboard protocol
 		Subclass:         1, // Boot interface subclass
 		ReportLength:     8,
@@ -139,17 +166,17 @@ func makeKeyboardHID(reportID *uint8) Hid {
 }
 
 // makeMouseHID 创建鼠标HID描述符
-func makeMouseHID(absolute bool, horizontalWheel bool, reportID *uint8) Hid {
+func (k *KM) makeMouseHID(absolute bool, horizontalWheel bool, reportID *uint8) HID {
 	// 根据鼠标类型调用不同的创建函数
 	if absolute {
-		return makeAbsoluteHID(horizontalWheel, reportID)
+		return k.makeAbsoluteHID(horizontalWheel, reportID)
 	} else {
-		return makeRelativeHID(horizontalWheel, reportID)
+		return k.makeRelativeHID(horizontalWheel, reportID)
 	}
 }
 
 // makeAbsoluteHID 创建绝对鼠标HID描述符
-func makeAbsoluteHID(horizontalWheel bool, reportID *uint8) Hid {
+func (k *KM) makeAbsoluteHID(horizontalWheel bool, reportID *uint8) HID {
 	reportDescriptor := []byte{
 		// Mouse
 		0x05, 0x01, // USAGE_PAGE (Generic Desktop)
@@ -197,7 +224,7 @@ func makeAbsoluteHID(horizontalWheel bool, reportID *uint8) Hid {
 		0x81, 0x06, // INPUT (Data,Var,Rel)
 	}...)
 
-	// 水平滚轮
+	// 添加水平滚轮描述符（如果支持）
 	if horizontalWheel {
 		reportDescriptor = append(reportDescriptor, []byte{
 			0x05, 0x0C, // USAGE_PAGE (Consumer Devices)
@@ -222,7 +249,7 @@ func makeAbsoluteHID(horizontalWheel bool, reportID *uint8) Hid {
 		reportLength = 7
 	}
 
-	return Hid{
+	return HID{
 		Protocol:         0, // None protocol
 		Subclass:         0, // No subclass
 		ReportLength:     reportLength,
@@ -231,7 +258,7 @@ func makeAbsoluteHID(horizontalWheel bool, reportID *uint8) Hid {
 }
 
 // makeRelativeHID 创建相对鼠标HID描述符
-func makeRelativeHID(horizontalWheel bool, reportID *uint8) Hid {
+func (k *KM) makeRelativeHID(horizontalWheel bool, reportID *uint8) HID {
 	reportDescriptor := []byte{
 		// Mouse
 		0x05, 0x01, // USAGE_PAGE (Generic Desktop)
@@ -274,7 +301,7 @@ func makeRelativeHID(horizontalWheel bool, reportID *uint8) Hid {
 		0x81, 0x06, // INPUT (Data,Var,Rel)
 	}...)
 
-	// 水平滚轮
+	// 添加水平滚轮描述符（如果支持）
 	if horizontalWheel {
 		reportDescriptor = append(reportDescriptor, []byte{
 			0x05, 0x0C, // USAGE_PAGE (Consumer Devices)
@@ -299,7 +326,7 @@ func makeRelativeHID(horizontalWheel bool, reportID *uint8) Hid {
 		reportLength = 5
 	}
 
-	return Hid{
+	return HID{
 		Protocol:         2, // Mouse protocol
 		Subclass:         1, // Boot interface subclass
 		ReportLength:     reportLength,

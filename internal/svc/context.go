@@ -4,11 +4,10 @@ import (
 	"context"
 	"log"
 	"opskvm/internal/conf"
-	"opskvm/internal/core/dhcp"
 	"opskvm/internal/core/files"
 	"opskvm/internal/core/hid"
 	"opskvm/internal/core/hid/ch9329"
-	"opskvm/internal/core/hid/otgm"
+	"opskvm/internal/core/hid/otg"
 	"opskvm/internal/core/video"
 	"opskvm/internal/utils/jwt"
 	"opskvm/internal/utils/resp"
@@ -24,10 +23,10 @@ type SvcContext struct {
 	Streamer video.Streamer
 	RESP     *resp.Resp
 	JWT      *jwt.JwtService
-	Gadget   otgm.GadgetInterface
+	Gadget   otg.GadgetInterface
 	KMHID    hid.KMHIDController
-	MSD      otgm.MSDInterface
-	NET      otgm.NetInterface
+	MSD      otg.MSDInterface
+	NET      otg.NetInterface
 	Done     chan struct{} // 用于通知主程序中断信号已处理
 }
 
@@ -74,18 +73,18 @@ func (s *SvcContext) initOTG() {
 	switch s.Conf.App.KMhidMode {
 	case "otg":
 		// 初始化USB Gadget服务
-		udcName, err := otgm.FindUDC()
+		udcName, err := otg.FindUDC()
 		if err != nil {
 			panic(err)
 		}
-		s.Gadget = otgm.New(s.Conf.App.Name, udcName)
+		s.Gadget = otg.New(s.Conf.App.Name, udcName)
 		_, err = s.Gadget.InitConfig()
 		if err != nil {
 			panic(err)
 		}
 
 		// 初始化键盘和鼠标
-		km := otgm.NewKM(s.Gadget)
+		km := otg.NewKM(s.Gadget)
 		if err := km.AddKeyboard(); err != nil {
 			panic(err)
 		}
@@ -99,20 +98,20 @@ func (s *SvcContext) initOTG() {
 		}
 
 		// 添加大CD/DVD服务
-		// s.MSD = otgm.NewMSD(s.Gadget)
-		// if err := s.MSD.AddMSD(); err != nil {
-		// 	panic(err)
-		// }
-
-		// 添加网络功能
-		s.NET = otgm.NewNET(s.Gadget)
-		_, err = s.NET.AddNET()
-		if err != nil {
+		s.MSD = otg.NewMSD(s.Gadget)
+		if err := s.MSD.AddMSD(); err != nil {
 			panic(err)
 		}
 
+		// 添加网络功能(与cd/dvd能离互斥，端点不够用)
+		// s.NET = otgm.NewNET(s.Gadget)
+		// _, err = s.NET.AddNET()
+		// if err != nil {
+		// 	panic(err)
+		// }
+
 		// 网卡用于启动DHCP服务器(后台启动)
-		go dhcp.Start("usb0")
+		// go dhcp.Start("usb0")
 
 		// 启动USB Gadget服务
 		err = s.Gadget.StartUDC()
@@ -120,7 +119,7 @@ func (s *SvcContext) initOTG() {
 			panic(err)
 		}
 
-		s.KMHID = otgm.NewOTGKMHIDControl()
+		s.KMHID = otg.NewOTGKMHIDControl()
 		s.KMHID.SetAbsoluteMouse(true) // 与CH9329保持一致，默认使用绝对鼠标模式
 		if err := s.KMHID.Open(); err != nil {
 			log.Printf("Failed to open OTG HID: %v", err)
@@ -196,7 +195,7 @@ func (s *SvcContext) loadConfig() {
 }
 
 // handleInterrupt 处理中断信号
-func (s *SvcContext) handleInterrupt(camera video.Camera, streamer video.Streamer, gadget otgm.GadgetInterface, done chan struct{}) {
+func (s *SvcContext) handleInterrupt(camera video.Camera, streamer video.Streamer, gadget otg.GadgetInterface, done chan struct{}) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
 	<-ch
