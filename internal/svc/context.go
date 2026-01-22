@@ -26,7 +26,6 @@ type SvcContext struct {
 	Gadget   otg.GadgetInterface
 	KMHID    hid.KMHIDController
 	MSD      otg.MSDInterface
-	NET      otg.NetInterface
 	Done     chan struct{} // 用于通知主程序中断信号已处理
 }
 
@@ -102,16 +101,6 @@ func (s *SvcContext) initOTG() {
 		if err := s.MSD.AddMSD(); err != nil {
 			panic(err)
 		}
-
-		// 添加网络功能(与cd/dvd能离互斥，端点不够用)
-		// s.NET = otgm.NewNET(s.Gadget)
-		// _, err = s.NET.AddNET()
-		// if err != nil {
-		// 	panic(err)
-		// }
-
-		// 网卡用于启动DHCP服务器(后台启动)
-		// go dhcp.Start("usb0")
 
 		// 启动USB Gadget服务
 		err = s.Gadget.StartUDC()

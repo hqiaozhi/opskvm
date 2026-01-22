@@ -90,7 +90,6 @@ func (g *Gadget) Unlink(path string) error {
 // InitConfig 初始化配置
 func (g *Gadget) InitConfig() (string, error) {
 	log.Printf("Gadget: Starting USB Gadget initialization")
-	log.Println("==================================================")
 
 	// 尝试删除旧的Gadget目录
 	if err := g.Remove(); err != nil {
@@ -224,14 +223,13 @@ func (g *Gadget) InitConfig() (string, error) {
 // logError 记录错误并返回
 func logError(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
-	log.Printf("Error: %v", err)
+	log.Printf("Gadget:  %v", err)
 	return err
 }
 
 // CreateFunction 创建功能目录
 func (g *Gadget) CreateFunction(funcName string) (string, error) {
 	funcPath := filepath.Join(g.gadgetPath, "functions", funcName)
-	log.Printf("Creating function directory: %s", funcPath)
 
 	// 检查functions目录是否存在
 	functionsPath := filepath.Join(g.gadgetPath, "functions")
@@ -244,7 +242,7 @@ func (g *Gadget) CreateFunction(funcName string) (string, error) {
 	if err != nil {
 		return "", logError("Failed to create function directory: %w", err)
 	}
-	log.Printf("Successfully created function directory: %s", funcPath)
+	log.Printf("Gadget: Successfully created function directory: %s", funcPath)
 	return funcPath, nil
 }
 
@@ -271,12 +269,12 @@ func (g *Gadget) StartUDC() error {
 
 	for i := 0; i < maxRetries; i++ {
 		// 启动UDC设备
-		log.Printf("Starting UDC device: %s (attempt %d/%d)", g.UDCControlName, i+1, maxRetries)
+		log.Printf("Gadget: Starting UDC device: %s (attempt %d/%d)", g.UDCControlName, i+1, maxRetries)
 		err := g.Write(udcPath, g.UDCControlName)
 		if err != nil {
-			log.Printf("Error: Failed to start UDC: %v", err)
+			log.Printf("Gadget: Error: Failed to start UDC: %v", err)
 			if i < maxRetries-1 {
-				log.Printf("Retrying in %v...", retryDelay)
+				log.Printf("Gadget: Retrying in %v...", retryDelay)
 				time.Sleep(retryDelay)
 				continue
 			}
@@ -284,13 +282,12 @@ func (g *Gadget) StartUDC() error {
 		}
 
 		// 给控制器一些时间初始化
-		log.Printf("Giving controller %v to initialize...", 500*time.Millisecond)
 		time.Sleep(500 * time.Millisecond)
-		log.Printf("UDC device started successfully: %s", g.UDCControlName)
+		log.Printf("Gadget: UDC device started successfully: %s", g.UDCControlName)
 		return nil
 	}
 
-	return fmt.Errorf("Failed to start UDC after %d attempts", maxRetries)
+	return fmt.Errorf("Gadget: Failed to start UDC after %d attempts", maxRetries)
 }
 
 func (g *Gadget) CloseUDC() error {
