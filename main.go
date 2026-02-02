@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fmt"
+	_ "opskvm/internal/packed"
+
+	"github.com/gogf/gf/v2/os/gctx"
+
 	"opskvm/internal/cmd"
 )
 
 func main() {
-	if err := cmd.RootCmd.Execute(); err != nil {
-		fmt.Println(err)
-	}
+	cmd.Main.Run(gctx.GetInitCtx())
 }
