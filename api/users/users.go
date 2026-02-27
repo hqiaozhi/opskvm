@@ -2,14 +2,15 @@
 // Code generated and maintained by GoFrame CLI tool. DO NOT EDIT.
 // =================================================================================
 
-package hello
+package users
 
 import (
-	"opskvm/api/hello"
+	"context"
+
+	"opskvm/api/users/v1"
 )
 
-type ControllerV1 struct{}
-
-func NewV1() hello.IHelloV1 {
-	return &ControllerV1{}
+type IUsersV1 interface {
+	Login(ctx context.Context, req *v1.LoginReq) (res *v1.LoginRes, err error)
+	Logout(ctx context.Context, req *v1.LogoutReq) (res *v1.LogoutRes, err error)
 }
