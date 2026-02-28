@@ -66,7 +66,7 @@ func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.S
 	// 连接的时候打开摄像头
 	err = c.kvm.SVC.Camera.TurnOn()
 	if err != nil {
-		g.Log().Errorf(ctx, "TurnOn Device: %s", err)
+		g.Log().Warningf(ctx, "TurnOn Device: %s", err)
 	}
 
 	conn, err := upgrader.Upgrade(gReq.Response.Writer, gReq.Request, nil)

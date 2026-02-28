@@ -2,6 +2,7 @@ package service
 
 import (
 	"log"
+	"opskvm/internal/service/files"
 	"opskvm/internal/service/hid"
 	"opskvm/internal/service/hid/ch9329"
 	"opskvm/internal/service/hid/otg"
@@ -16,13 +17,15 @@ import (
 var Svc = &SVC{}
 
 type SVC struct {
-	Camera   video.Camera
-	Streamer video.Streamer
-	Gadget   otg.GadgetInterface
-	HID      hid.KMHIDController
-	MSD      otg.MSDInterface
-	CTX      g.Ctx
-	Done     chan struct{}
+	Camera      video.Camera
+	Streamer    video.Streamer
+	Gadget      otg.GadgetInterface
+	HID         hid.KMHIDController
+	MSD         otg.MSDInterface
+	CTX         g.Ctx
+	ChunkUpload files.IChunkUploadService
+	FileManager files.IFileManagerService
+	Done        chan struct{}
 }
 
 func New() {
@@ -30,12 +33,19 @@ func New() {
 	Svc.initOTG()
 	Svc.initVideo()
 
+	Svc.initFilesManager()
+
 	// 启动服务中断处理
 	done := make(chan struct{})
 	go Svc.handleInterrupt(Svc.Camera, Svc.Streamer, Svc.Gadget, done)
 
 	// 将通道存储在上下文中，以便主程序等待
 	Svc.Done = done
+}
+
+func (s *SVC) initFilesManager() {
+	s.ChunkUpload = files.GetChunkUploadService()
+	s.FileManager = files.GetFileManagerService()
 }
 
 func (s *SVC) initOTG() {

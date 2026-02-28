@@ -115,7 +115,7 @@ func (c *V4LCamera) SetConfig(cfg v4l.DeviceConfig) error {
 	return nil
 }
 
-// UpdateConfig 重构：关闭设备→重新打开→应用新配置（核心修改）
+// UpdateConfig 关闭设备→重新打开→应用新配置
 func (c *V4LCamera) UpdateConfig(width, height int, fps uint32) (v4l.DeviceConfig, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

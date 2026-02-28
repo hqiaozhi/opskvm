@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"opskvm/internal/controller/files"
 	"opskvm/internal/controller/kvm"
 	"opskvm/internal/controller/users"
 	"opskvm/internal/service"
@@ -65,14 +66,17 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 	service.New()
 
 	s := g.Server()
+	s.SetGraceful(true)
 	s.SetAddr(in.Host + ":" + in.Port)
 	s.SetOpenApiPath("/api.json")
 	s.SetSwaggerPath("/swagger")
+
 	s.Group("/api/v1", func(group *ghttp.RouterGroup) {
 		group.Middleware(ghttp.MiddlewareHandlerResponse, MiddlewareCORS)
 		group.Bind(
 			kvm.NewV1(),
 			users.NewV1(),
+			files.NewV1(),
 		)
 	})
 
