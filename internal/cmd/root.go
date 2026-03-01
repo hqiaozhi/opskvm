@@ -4,6 +4,7 @@ import (
 	"context"
 	"opskvm/internal/controller/files"
 	"opskvm/internal/controller/kvm"
+	"opskvm/internal/controller/system"
 	"opskvm/internal/controller/users"
 	"opskvm/internal/service"
 	fileService "opskvm/internal/service/files"
@@ -81,6 +82,7 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 			kvm.NewV1(),
 			users.NewV1(),
 			files.NewV1(),
+			system.NewV1(),
 		)
 	})
 
