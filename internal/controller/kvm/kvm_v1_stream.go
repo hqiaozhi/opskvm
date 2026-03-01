@@ -90,7 +90,7 @@ func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.S
 		for {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
-				g.Log().Errorf(ctx, "[%s] Read message error: %v", gReq.GetClientIp(), err)
+				g.Log().Warningf(ctx, "[%s] Read message error: %v", gReq.GetClientIp(), err)
 				return
 			}
 

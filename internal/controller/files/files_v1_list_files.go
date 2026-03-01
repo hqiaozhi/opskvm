@@ -21,6 +21,7 @@ func (c *ControllerV1) ListFiles(ctx context.Context, req *v1.ListFilesReq) (res
 			RelPath:   f.RelPath,
 			Size:      f.Size,
 			IsDir:     f.IsDir,
+			URL:       f.URL,
 			CreatedAt: f.CreatedAt,
 			UpdatedAt: f.UpdatedAt,
 		})

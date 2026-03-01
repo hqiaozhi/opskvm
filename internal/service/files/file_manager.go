@@ -2,8 +2,6 @@ package files
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +13,7 @@ import (
 
 const (
 	FileStorageDir = "/data/opskvm/uploads"
+	StaticFileURL  = "/downloads"
 )
 
 type FileInfo struct {
@@ -24,6 +23,7 @@ type FileInfo struct {
 	RelPath   string `json:"rel_path"`
 	Size      int64  `json:"size"`
 	IsDir     bool   `json:"is_dir"`
+	URL       string `json:"url" dc:"文件下载地址"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
@@ -39,7 +39,6 @@ type IFileManagerService interface {
 	ListFiles(path string, page, limit int) (int, []FileInfo, error)
 	GetFileInfo(fileId string) (*FileInfo, error)
 	DeleteFiles(paths string) (int, []string, error)
-	DownloadFile(fileId string, w http.ResponseWriter) error
 	GetFilePath(fileId string) string
 	GetStorageDir() string
 	GetStorageInfo() (*StorageInfo, error)
@@ -48,6 +47,7 @@ type IFileManagerService interface {
 
 type FileManagerService struct {
 	storageDir string
+	staticURL  string
 }
 
 var _ IFileManagerService = (*FileManagerService)(nil)
@@ -58,6 +58,7 @@ func GetFileManagerService() *FileManagerService {
 	onceFile.Do(func() {
 		fileManagerService = &FileManagerService{
 			storageDir: FileStorageDir,
+			staticURL:  StaticFileURL,
 		}
 		fileManagerService.initDir()
 	})
@@ -160,6 +161,11 @@ func (s *FileManagerService) ListFiles(targetPath string, page, limit int) (int,
 			return nil
 		}
 
+		var fileURL string
+		if !info.IsDir() {
+			fileURL = s.staticURL + "/" + relPath
+		}
+
 		files = append(files, FileInfo{
 			Id:        info.Name(),
 			Name:      info.Name(),
@@ -167,6 +173,7 @@ func (s *FileManagerService) ListFiles(targetPath string, page, limit int) (int,
 			RelPath:   relPath,
 			Size:      info.Size(),
 			IsDir:     info.IsDir(),
+			URL:       fileURL,
 			CreatedAt: info.ModTime().Format("2006-01-02 15:04:05"),
 			UpdatedAt: info.ModTime().Format("2006-01-02 15:04:05"),
 		})
@@ -223,6 +230,11 @@ func (s *FileManagerService) GetFileInfo(targetPath string) (*FileInfo, error) {
 		return nil, err
 	}
 
+	var fileURL string
+	if !info.IsDir() {
+		fileURL = s.staticURL + "/" + validatedPath
+	}
+
 	return &FileInfo{
 		Id:        info.Name(),
 		Name:      info.Name(),
@@ -230,6 +242,7 @@ func (s *FileManagerService) GetFileInfo(targetPath string) (*FileInfo, error) {
 		RelPath:   targetPath,
 		Size:      info.Size(),
 		IsDir:     info.IsDir(),
+		URL:       fileURL,
 		CreatedAt: info.ModTime().Format("2006-01-02 15:04:05"),
 		UpdatedAt: info.ModTime().Format("2006-01-02 15:04:05"),
 	}, nil
@@ -294,45 +307,6 @@ func (s *FileManagerService) DeleteFiles(paths string) (int, []string, error) {
 	}
 
 	return deletedCount, failedPaths, nil
-}
-
-func (s *FileManagerService) DownloadFile(targetPath string, w http.ResponseWriter) error {
-	validatedPath, err := s.validateAndCleanPath(targetPath)
-	if err != nil {
-		return err
-	}
-
-	if validatedPath == "" {
-		return fmt.Errorf("不能下载根目录")
-	}
-
-	filePath := filepath.Join(s.storageDir, validatedPath)
-
-	if !gfile.Exists(filePath) {
-		return fmt.Errorf("文件不存在: %s", validatedPath)
-	}
-
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return err
-	}
-
-	if info.IsDir() {
-		return fmt.Errorf("不能下载目录: %s", validatedPath)
-	}
-
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filepath.Base(validatedPath)))
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	_, err = io.Copy(w, file)
-	return err
 }
 
 func (s *FileManagerService) GetFilePath(targetPath string) string {

@@ -100,6 +100,7 @@ type FileInfo struct {
 	RelPath   string `json:"rel_path" dc:"相对路径"`
 	Size      int64  `json:"size" dc:"文件大小（字节）"`
 	IsDir     bool   `json:"is_dir" dc:"是否为目录"`
+	URL       string `json:"url" dc:"文件下载地址"`
 	CreatedAt string `json:"created_at" dc:"创建时间"`
 	UpdatedAt string `json:"updated_at" dc:"更新时间"`
 }
@@ -132,14 +133,6 @@ type DeleteFileReq struct {
 type DeleteFileRes struct {
 	DeletedCount int      `json:"deleted_count" dc:"成功删除数量"`
 	FailedIds    []string `json:"failed_ids" dc:"删除失败的路径"`
-}
-
-type DownloadFileReq struct {
-	g.Meta `path:"files/download/*fileId" method:"get" sm:"下载文件" tags:"文件管理"`
-	FileId string `json:"file_id" dc:"文件ID或文件路径"`
-}
-
-type DownloadFileRes struct {
 }
 
 type GetStorageInfoReq struct {

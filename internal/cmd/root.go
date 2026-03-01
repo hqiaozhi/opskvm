@@ -6,6 +6,7 @@ import (
 	"opskvm/internal/controller/kvm"
 	"opskvm/internal/controller/users"
 	"opskvm/internal/service"
+	fileService "opskvm/internal/service/files"
 	"time"
 
 	"github.com/gogf/gf/v2/frame/g"
@@ -70,6 +71,9 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 	s.SetAddr(in.Host + ":" + in.Port)
 	s.SetOpenApiPath("/api.json")
 	s.SetSwaggerPath("/swagger")
+
+	staticDir := fileService.GetFileManagerService().GetStorageDir()
+	s.AddStaticPath("/downloads", staticDir)
 
 	s.Group("/api/v1", func(group *ghttp.RouterGroup) {
 		group.Middleware(ghttp.MiddlewareHandlerResponse, MiddlewareCORS)

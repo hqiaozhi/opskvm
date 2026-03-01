@@ -20,7 +20,6 @@ type IFilesV1 interface {
 	ListFiles(ctx context.Context, req *v1.ListFilesReq) (res *v1.ListFilesRes, err error)
 	GetFileInfo(ctx context.Context, req *v1.GetFileInfoReq) (res *v1.GetFileInfoRes, err error)
 	DeleteFile(ctx context.Context, req *v1.DeleteFileReq) (res *v1.DeleteFileRes, err error)
-	DownloadFile(ctx context.Context, req *v1.DownloadFileReq) (res *v1.DownloadFileRes, err error)
 	GetStorageInfo(ctx context.Context, req *v1.GetStorageInfoReq) (res *v1.GetStorageInfoRes, err error)
 	CreateDirectory(ctx context.Context, req *v1.CreateDirectoryReq) (res *v1.CreateDirectoryRes, err error)
 }
