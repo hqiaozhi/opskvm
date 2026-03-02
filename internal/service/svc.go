@@ -6,7 +6,9 @@ import (
 	"opskvm/internal/service/hid"
 	"opskvm/internal/service/hid/ch9329"
 	"opskvm/internal/service/hid/otg"
+	"opskvm/internal/service/sqlite"
 	"opskvm/internal/service/video"
+	"opskvm/internal/service/wol"
 	"os"
 	"os/signal"
 	"time"
@@ -25,16 +27,23 @@ type SVC struct {
 	CTX         g.Ctx
 	ChunkUpload files.IChunkUploadService
 	FileManager files.IFileManagerService
+	SQL         sqlite.Sqliter
+	WOL         wol.WOLInterface
 	Done        chan struct{}
 }
 
-func New() {
+func New(rootPath string) {
 	Svc = &SVC{}
+	// 初始化OTG
 	Svc.initOTG()
+	// 初始化视频
 	Svc.initVideo()
-
-	Svc.initFilesManager()
-
+	// 初始化文件管理
+	Svc.initFilesManager(rootPath)
+	// 初始化数据库
+	Svc.initSqlite(rootPath)
+	// 初始化WOL
+	Svc.WOL = wol.NewWOL()
 	// 启动服务中断处理
 	done := make(chan struct{})
 	go Svc.handleInterrupt(Svc.Camera, Svc.Streamer, Svc.Gadget, done)
@@ -43,9 +52,13 @@ func New() {
 	Svc.Done = done
 }
 
-func (s *SVC) initFilesManager() {
-	s.ChunkUpload = files.GetChunkUploadService()
-	s.FileManager = files.GetFileManagerService()
+func (s *SVC) initSqlite(rootPath string) {
+	s.SQL = sqlite.NewSqlite(rootPath)
+}
+
+func (s *SVC) initFilesManager(rootPath string) {
+	s.ChunkUpload = files.GetChunkUploadService(rootPath)
+	s.FileManager = files.GetFileManagerService(rootPath)
 }
 
 func (s *SVC) initOTG() {

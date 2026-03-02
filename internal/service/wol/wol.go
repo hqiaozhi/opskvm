@@ -9,11 +9,7 @@ import (
 )
 
 type WOLInterface interface {
-	SendMagicPacket() error
-
-	// macToBytes converts MAC address to byte slice
-	// 私有方法
-	macToBytes() ([]byte, error)
+	WakeUp(broadcast_ip string, port int, mac string) error
 }
 
 // WOL represents a Wake-on-LAN configuration
@@ -24,27 +20,8 @@ type WOL struct {
 }
 
 // NewWOL creates a new WOL instance with validation
-func NewWOL(ip string, port int, mac string) (WOLInterface, error) {
-	// Validate MAC address
-	if !ValidMAC(mac) {
-		return nil, fmt.Errorf("invalid MAC address format: %s", mac)
-	}
-
-	// Validate IP address
-	if ip != "" && net.ParseIP(ip) == nil {
-		return nil, fmt.Errorf("invalid IP address: %s", ip)
-	}
-
-	// Validate port
-	if port < 1 || port > 65535 {
-		return nil, fmt.Errorf("invalid port number: %d", port)
-	}
-
-	return &WOL{
-		IP:   ip,
-		Port: port,
-		MAC:  mac,
-	}, nil
+func NewWOL() WOLInterface {
+	return &WOL{}
 }
 
 // ValidMAC validates a MAC address format
@@ -56,10 +33,25 @@ func ValidMAC(mac string) bool {
 }
 
 // SendMagicPacket sends a Wake-on-LAN magic packet
-func (w *WOL) SendMagicPacket() error {
+func (w *WOL) WakeUp(broadcast_ip string, port int, mac string) error {
+	// Validate MAC address
+	if !ValidMAC(mac) {
+		return fmt.Errorf("invalid MAC address format: %s", mac)
+	}
+
+	// Validate IP address
+	if broadcast_ip != "" && net.ParseIP(broadcast_ip) == nil {
+		return fmt.Errorf("invalid IP address: %s", broadcast_ip)
+	}
+
+	// Validate port
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("invalid port number: %d", port)
+	}
+
 	// Create magic packet
 	// Magic packet format: 6 bytes of FF followed by 16 repetitions of the MAC address
-	macBytes, err := w.macToBytes()
+	macBytes, err := w.macToBytesByMac(mac)
 	if err != nil {
 		return err
 	}
@@ -79,8 +71,8 @@ func (w *WOL) SendMagicPacket() error {
 
 	// Create UDP socket
 	socket, err := net.DialUDP("udp4", nil, &net.UDPAddr{
-		IP:   net.ParseIP(w.IP),
-		Port: w.Port,
+		IP:   net.ParseIP(broadcast_ip),
+		Port: port,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create UDP socket: %w", err)
@@ -107,15 +99,15 @@ func (w *WOL) SendMagicPacket() error {
 	return nil
 }
 
-// macToBytes converts a MAC address string to bytes
-func (w *WOL) macToBytes() ([]byte, error) {
+// macToBytesByMac converts a MAC address string to bytes
+func (w *WOL) macToBytesByMac(mac string) ([]byte, error) {
 	// Remove separators
-	mac := strings.ReplaceAll(w.MAC, ":", "")
+	mac = strings.ReplaceAll(mac, ":", "")
 	mac = strings.ReplaceAll(mac, "-", "")
 
 	// Check length
 	if len(mac) != 12 {
-		return nil, fmt.Errorf("invalid MAC address length: %s", w.MAC)
+		return nil, fmt.Errorf("invalid MAC address length: %s", mac)
 	}
 
 	// Convert to bytes

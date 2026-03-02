@@ -3,12 +3,13 @@ package main
 import (
 	_ "opskvm/internal/packed"
 
+	"opskvm/internal/cmd"
+
+	_ "github.com/gogf/gf/contrib/drivers/sqlite/v2"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/os/gcmd"
 	"github.com/gogf/gf/v2/os/gctx"
 	"github.com/gogf/gf/v2/os/gtime"
-
-	"opskvm/internal/cmd"
 )
 
 const (

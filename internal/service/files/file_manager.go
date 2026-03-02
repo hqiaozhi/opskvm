@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	FileStorageDir = "/data/opskvm/uploads"
+	FileStorageDir = "uploads"
 	StaticFileURL  = "/downloads"
 )
 
@@ -54,10 +54,10 @@ var _ IFileManagerService = (*FileManagerService)(nil)
 var fileManagerService *FileManagerService
 var onceFile sync.Once
 
-func GetFileManagerService() *FileManagerService {
+func GetFileManagerService(rootPath string) *FileManagerService {
 	onceFile.Do(func() {
 		fileManagerService = &FileManagerService{
-			storageDir: FileStorageDir,
+			storageDir: filepath.Join(rootPath, FileStorageDir),
 			staticURL:  StaticFileURL,
 		}
 		fileManagerService.initDir()

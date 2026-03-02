@@ -16,6 +16,9 @@ func (c Init) cmdLine(ctx context.Context, in CIintInput) error {
 		return err
 	}
 
+	// 设置Debug模式
+	g.SetDebug(in.Debug)
+
 	// Device
 	if in.VideoDevice {
 		for _, v := range v4l.FindDevices() {

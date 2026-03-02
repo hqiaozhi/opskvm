@@ -16,8 +16,6 @@ import (
 
 const (
 	DefaultChunkSize = 5 * 1024 * 1024
-	UploadTempDir    = "/data/opskvm/uploads/.tmp"
-	UploadFinalDir   = "/data/opskvm/uploads"
 )
 
 type UploadSession struct {
@@ -51,18 +49,24 @@ type FileMeta struct {
 }
 
 type ChunkUploadService struct {
-	sessions map[string]*UploadSession
-	mu       sync.RWMutex
+	sessions       map[string]*UploadSession
+	mu             sync.RWMutex
+	rootPath       string
+	UploadTempDir  string
+	UploadFinalDir string
 }
 
 var _ IChunkUploadService = (*ChunkUploadService)(nil)
 var chunkUploadService *ChunkUploadService
 var onceChunk sync.Once
 
-func GetChunkUploadService() *ChunkUploadService {
+func GetChunkUploadService(rootPath string) *ChunkUploadService {
 	onceChunk.Do(func() {
 		chunkUploadService = &ChunkUploadService{
-			sessions: make(map[string]*UploadSession),
+			sessions:       make(map[string]*UploadSession),
+			rootPath:       rootPath,
+			UploadFinalDir: filepath.Join(rootPath, "uploads"),
+			UploadTempDir:  filepath.Join(rootPath, "uploads/.tmp"),
 		}
 		chunkUploadService.initDirs()
 	})
@@ -70,7 +74,7 @@ func GetChunkUploadService() *ChunkUploadService {
 }
 
 func (s *ChunkUploadService) initDirs() {
-	for _, dir := range []string{UploadTempDir, UploadFinalDir} {
+	for _, dir := range []string{s.UploadTempDir, s.UploadFinalDir} {
 		if !gfile.Exists(dir) {
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				fmt.Printf("创建上传目录失败: %s, err: %v\n", dir, err)
@@ -152,12 +156,12 @@ func (s *ChunkUploadService) InitUpload(fileMetas []FileMeta, chunkSize int64) (
 		sessions = append(sessions, session)
 
 		if isDir {
-			dirPath := filepath.Join(UploadFinalDir, meta.Path)
+			dirPath := filepath.Join(s.UploadFinalDir, meta.Path)
 			if err := os.MkdirAll(dirPath, 0755); err != nil {
 				fmt.Printf("创建目录失败: %s, err: %v\n", dirPath, err)
 			}
 		} else {
-			dirPath := filepath.Dir(filepath.Join(UploadFinalDir, meta.Path))
+			dirPath := filepath.Dir(filepath.Join(s.UploadFinalDir, meta.Path))
 			if err := os.MkdirAll(dirPath, 0755); err != nil {
 				fmt.Printf("创建父目录失败: %s, err: %v\n", dirPath, err)
 			}
@@ -171,7 +175,7 @@ func (s *ChunkUploadService) InitUpload(fileMetas []FileMeta, chunkSize int64) (
 }
 
 func (s *ChunkUploadService) GetUploadDir(uploadID string) string {
-	return filepath.Join(UploadTempDir, uploadID)
+	return filepath.Join(s.UploadTempDir, uploadID)
 }
 
 func (s *ChunkUploadService) RecordChunk(uploadID string, chunkIndex int, size int64) {
@@ -249,12 +253,12 @@ func (s *ChunkUploadService) CompleteUpload(ctx context.Context, uploadID string
 	}
 
 	uploadDir := s.GetUploadDir(uploadID)
-	finalDir := filepath.Dir(filepath.Join(UploadFinalDir, session.Path))
+	finalDir := filepath.Dir(filepath.Join(s.UploadFinalDir, session.Path))
 	if err := os.MkdirAll(finalDir, 0755); err != nil {
 		return "", fmt.Errorf("创建最终目录失败: %v", err)
 	}
 
-	finalPath := filepath.Join(UploadFinalDir, session.Path)
+	finalPath := filepath.Join(s.UploadFinalDir, session.Path)
 
 	if gfile.Exists(finalPath) {
 		info, err := os.Stat(finalPath)

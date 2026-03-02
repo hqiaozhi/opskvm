@@ -6,6 +6,7 @@ import (
 	"opskvm/internal/controller/kvm"
 	"opskvm/internal/controller/system"
 	"opskvm/internal/controller/users"
+	"opskvm/internal/controller/wake"
 	"opskvm/internal/service"
 	fileService "opskvm/internal/service/files"
 	"time"
@@ -28,6 +29,8 @@ type CIintInput struct {
 	Port     string `short:"P" name:"port" default:"8080"  brief:"port of http server"`
 	Username string `short:"u" name:"username" default:"admin"  brief:"login username"`
 	Password string `short:"p" name:"password" default:"admin123"  brief:"login password"`
+	Debug    bool   `short:"d" name:"debug" brief:"debug mode" orphan:"true"`
+	RootPath string `short:"D" name:"rootpath" default:"/data/opskvm/"  brief:"root path (save data)"`
 
 	// JWT配置
 	SecretKey     string        `short:"s" name:"secretkey" default:"hv4cW0kHLoigQcmVlHACmOIwVFaIQhd0qIf7SXgy4sffFRcmere85VKZrtbuMcH9"  brief:"jwt secret key"`
@@ -65,15 +68,16 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 	}
 
 	// 初始化Service
-	service.New()
+	service.New(in.RootPath)
 
 	s := g.Server()
+
 	s.SetGraceful(true)
 	s.SetAddr(in.Host + ":" + in.Port)
 	s.SetOpenApiPath("/api.json")
 	s.SetSwaggerPath("/swagger")
 
-	staticDir := fileService.GetFileManagerService().GetStorageDir()
+	staticDir := fileService.GetFileManagerService(in.RootPath).GetStorageDir()
 	s.AddStaticPath("/downloads", staticDir)
 
 	s.Group("/api/v1", func(group *ghttp.RouterGroup) {
@@ -83,6 +87,7 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 			users.NewV1(),
 			files.NewV1(),
 			system.NewV1(),
+			wake.NewV1(),
 		)
 	})
 
