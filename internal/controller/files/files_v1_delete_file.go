@@ -7,7 +7,9 @@ import (
 )
 
 func (c *ControllerV1) DeleteFile(ctx context.Context, req *v1.DeleteFileReq) (res *v1.DeleteFileRes, err error) {
-	deletedCount, failedIds, err := c.Files.SVC.FileManager.DeleteFiles(req.FileIds)
+	fileIds := req.FileIds
+
+	deletedCount, failedIds, err := c.Files.SVC.FileManager.DeleteFiles(fileIds)
 	if err != nil {
 		return nil, err
 	}

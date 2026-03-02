@@ -1,4 +1,4 @@
-package files
+package mirrors
 
 import (
 	"context"
@@ -15,27 +15,31 @@ import (
 
 const (
 	DefaultChunkSize = 5 * 1024 * 1024
+	StorageDir       = "mirrors"
+	StaticURL        = "/mirrors"
 )
+
+type FileMeta struct {
+	FileName string `json:"file_name"`
+	Size     int64  `json:"size"`
+}
 
 type UploadSession struct {
 	UploadID    string        `json:"upload_id"`
-	Path        string        `json:"path" dc:"文件路径（含目录）"`
 	FileName    string        `json:"file_name" dc:"文件名"`
 	FileSize    int64         `json:"file_size" dc:"文件大小"`
 	ChunkSize   int64         `json:"chunk_size" dc:"分块大小"`
 	ChunkCount  int           `json:"chunk_count" dc:"总分块数"`
-	IsDir       bool          `json:"is_dir" dc:"是否为目录"`
 	UploadedMap map[int]int64 `json:"uploaded_map" dc:"已上传分块"`
 	FinalPath   string        `json:"final_path" dc:"最终文件路径"`
 	File        *os.File      `json:"-" dc:"文件句柄"`
 	CreatedAt   time.Time     `json:"created_at" dc:"创建时间"`
 }
 
-type IChunkUploadService interface {
+type IMirrorsChunkUploadService interface {
 	InitUpload(fileMetas []FileMeta, chunkSize int64) ([]UploadSession, error)
 	UploadChunk(ctx context.Context, uploadID string, chunkIndex int, chunkData []byte) (int64, error)
 	CompleteUpload(ctx context.Context, uploadID string) (string, error)
-	CompleteAllUploads(ctx context.Context) (int, []UploadSession, error)
 	CancelUpload(ctx context.Context, uploadID string) error
 	GetUploadStatus(uploadID string) (*UploadSession, error)
 	GetSession(uploadID string) (*UploadSession, bool)
@@ -43,59 +47,48 @@ type IChunkUploadService interface {
 	GetAllSessions() map[string]*UploadSession
 }
 
-type FileMeta struct {
-	Path string `json:"path"`
-	Size int64  `json:"size"`
-}
-
 type ChunkUploadService struct {
-	sessions       map[string]*UploadSession
-	mu             sync.RWMutex
-	rootPath       string
-	UploadFinalDir string
+	sessions map[string]*UploadSession
+	mu       sync.RWMutex
+	rootPath string
+	FinalDir string
 }
 
-var _ IChunkUploadService = (*ChunkUploadService)(nil)
+var _ IMirrorsChunkUploadService = (*ChunkUploadService)(nil)
 var chunkUploadService *ChunkUploadService
 var onceChunk sync.Once
 
-func GetChunkUploadService(rootPath string) *ChunkUploadService {
+func GetMirrorsChunkUploadService(rootPath string) *ChunkUploadService {
 	onceChunk.Do(func() {
 		chunkUploadService = &ChunkUploadService{
-			sessions:       make(map[string]*UploadSession),
-			rootPath:       rootPath,
-			UploadFinalDir: filepath.Join(rootPath, "uploads"),
+			sessions: make(map[string]*UploadSession),
+			rootPath: rootPath,
+			FinalDir: filepath.Join(rootPath, StorageDir),
 		}
-		if err := os.MkdirAll(chunkUploadService.UploadFinalDir, 0755); err != nil {
-			fmt.Printf("创建目录失败: %s, err: %v\n", chunkUploadService.UploadFinalDir, err)
+		if err := os.MkdirAll(chunkUploadService.FinalDir, 0755); err != nil {
+			fmt.Printf("创建目录失败: %s, err: %v\n", chunkUploadService.FinalDir, err)
 		}
 	})
 	return chunkUploadService
 }
 
 func (s *ChunkUploadService) generateUploadID() string {
-	return fmt.Sprintf("%s_%d", grand.Letters(16), time.Now().Unix())
+	return fmt.Sprintf("_%s_%d", grand.Letters(16), time.Now().Unix())
 }
 
-func (s *ChunkUploadService) validatePath(path string) error {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return fmt.Errorf("路径不能为空")
+func (s *ChunkUploadService) validateFileName(fileName string) error {
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" {
+		return fmt.Errorf("文件名不能为空")
 	}
 
-	cleanPath := filepath.Clean(path)
-	if strings.HasPrefix(cleanPath, "..") {
-		return fmt.Errorf("无效的路径")
+	cleanName := filepath.Base(fileName)
+	if strings.HasPrefix(cleanName, ".") {
+		return fmt.Errorf("不支持隐藏文件")
 	}
 
-	parts := strings.Split(cleanPath, "/")
-	for _, part := range parts {
-		if strings.HasPrefix(part, ".") {
-			return fmt.Errorf("不支持隐藏文件或目录")
-		}
-		if containsSpecialChars(part) {
-			return fmt.Errorf("文件名包含特殊字符: %s", part)
-		}
+	if containsSpecialCharsAllowNoExt(cleanName) {
+		return fmt.Errorf("文件名包含特殊字符: %s", cleanName)
 	}
 
 	return nil
@@ -116,47 +109,32 @@ func (s *ChunkUploadService) InitUpload(fileMetas []FileMeta, chunkSize int64) (
 	defer s.mu.Unlock()
 
 	for _, meta := range fileMetas {
-		if err := s.validatePath(meta.Path); err != nil {
+		if err := s.validateFileName(meta.FileName); err != nil {
 			continue
 		}
 
-		var chunkCount int
-		var isDir bool
-
-		if meta.Size == 0 {
-			isDir = true
-			chunkCount = 0
-		} else {
-			chunkCount = int((meta.Size + chunkSize - 1) / chunkSize)
-		}
+		chunkCount := int((meta.Size + chunkSize - 1) / chunkSize)
 
 		uploadID := s.generateUploadID()
-		fileName := filepath.Base(meta.Path)
 
-		finalPath := filepath.Join(s.UploadFinalDir, meta.Path)
+		finalPath := filepath.Join(s.FinalDir, meta.FileName)
 		dirPath := filepath.Dir(finalPath)
 		if err := os.MkdirAll(dirPath, 0755); err != nil {
 			fmt.Printf("创建父目录失败: %s, err: %v\n", dirPath, err)
 		}
 
-		var finalFile *os.File
-		if !isDir {
-			f, err := os.OpenFile(finalPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-			if err != nil {
-				fmt.Printf("创建最终文件失败: %s, err: %v\n", finalPath, err)
-				continue
-			}
-			finalFile = f
+		finalFile, err := os.OpenFile(finalPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			fmt.Printf("创建最终文件失败: %s, err: %v\n", finalPath, err)
+			continue
 		}
 
 		session := UploadSession{
 			UploadID:    uploadID,
-			Path:        meta.Path,
-			FileName:    fileName,
+			FileName:    meta.FileName,
 			FileSize:    meta.Size,
 			ChunkSize:   chunkSize,
 			ChunkCount:  chunkCount,
-			IsDir:       isDir,
 			UploadedMap: make(map[int]int64),
 			FinalPath:   finalPath,
 			File:        finalFile,
@@ -164,10 +142,11 @@ func (s *ChunkUploadService) InitUpload(fileMetas []FileMeta, chunkSize int64) (
 		}
 
 		s.sessions[uploadID] = &session
-		sessions = append(sessions, session)
 
-		fmt.Printf("[InitUpload] uploadId=%s, path=%s, size=%d, chunkCount=%d, isDir=%v\n",
-			uploadID, meta.Path, meta.Size, chunkCount, isDir)
+		fmt.Printf("[InitUpload] uploadId=%s, fileName=%s, size=%d, chunkCount=%d\n",
+			uploadID, meta.FileName, meta.Size, chunkCount)
+
+		sessions = append(sessions, session)
 	}
 
 	return sessions, nil
@@ -190,10 +169,6 @@ func (s *ChunkUploadService) UploadChunk(ctx context.Context, uploadID string, c
 		return 0, fmt.Errorf("上传会话不存在: %s", uploadID)
 	}
 
-	if session.IsDir {
-		return 0, fmt.Errorf("目录不需要上传分块: %s", uploadID)
-	}
-
 	if chunkIndex < 0 || chunkIndex >= session.ChunkCount {
 		return 0, fmt.Errorf("分块索引无效: %d, 总分块数: %d", chunkIndex, session.ChunkCount)
 	}
@@ -206,7 +181,7 @@ func (s *ChunkUploadService) UploadChunk(ctx context.Context, uploadID string, c
 
 	_, err := file.Seek(offset, io.SeekStart)
 	if err != nil {
-		return 0, fmt.Errorf("seek 失败: %v", err)
+		return 0, fmt.Errorf(" seek 失败: %v", err)
 	}
 
 	_, err = file.Write(chunkData)
@@ -234,13 +209,6 @@ func (s *ChunkUploadService) CompleteUpload(ctx context.Context, uploadID string
 		return "", fmt.Errorf("上传会话不存在: %s", uploadID)
 	}
 
-	if session.IsDir {
-		s.mu.Lock()
-		delete(s.sessions, uploadID)
-		s.mu.Unlock()
-		return session.Path, nil
-	}
-
 	if len(session.UploadedMap) != session.ChunkCount {
 		return "", fmt.Errorf("分块未全部上传: 已上传 %d/%d", len(session.UploadedMap), session.ChunkCount)
 	}
@@ -254,34 +222,6 @@ func (s *ChunkUploadService) CompleteUpload(ctx context.Context, uploadID string
 	fmt.Printf("[CompleteUpload] 完成, uploadId=%s, finalPath=%s\n", uploadID, session.FinalPath)
 
 	return session.FinalPath, nil
-}
-
-func (s *ChunkUploadService) CompleteAllUploads(ctx context.Context) (int, []UploadSession, error) {
-	s.mu.RLock()
-	var pendingSessions []UploadSession
-	for _, session := range s.sessions {
-		pendingSessions = append(pendingSessions, *session)
-	}
-	s.mu.RUnlock()
-
-	if len(pendingSessions) == 0 {
-		return 0, nil, nil
-	}
-
-	var completedSessions []UploadSession
-	completedCount := 0
-
-	for _, session := range pendingSessions {
-		_, err := s.CompleteUpload(ctx, session.UploadID)
-		if err != nil {
-			fmt.Printf("[CompleteAllUploads] failed: uploadId=%s, err=%v\n", session.UploadID, err)
-			continue
-		}
-		completedSessions = append(completedSessions, session)
-		completedCount++
-	}
-
-	return completedCount, completedSessions, nil
 }
 
 func (s *ChunkUploadService) CancelUpload(ctx context.Context, uploadID string) error {

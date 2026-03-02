@@ -4,6 +4,7 @@ import (
 	"context"
 	"opskvm/internal/controller/files"
 	"opskvm/internal/controller/kvm"
+	"opskvm/internal/controller/mirrors"
 	"opskvm/internal/controller/system"
 	"opskvm/internal/controller/users"
 	"opskvm/internal/controller/wake"
@@ -88,6 +89,7 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 			files.NewV1(),
 			system.NewV1(),
 			wake.NewV1(),
+			mirrors.NewV1(),
 		)
 	})
 

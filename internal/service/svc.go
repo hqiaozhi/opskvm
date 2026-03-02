@@ -6,6 +6,7 @@ import (
 	"opskvm/internal/service/hid"
 	"opskvm/internal/service/hid/ch9329"
 	"opskvm/internal/service/hid/otg"
+	"opskvm/internal/service/mirrors"
 	"opskvm/internal/service/sqlite"
 	"opskvm/internal/service/video"
 	"opskvm/internal/service/wol"
@@ -19,17 +20,19 @@ import (
 var Svc = &SVC{}
 
 type SVC struct {
-	Camera      video.Camera
-	Streamer    video.Streamer
-	Gadget      otg.GadgetInterface
-	HID         hid.KMHIDController
-	MSD         otg.MSDInterface
-	CTX         g.Ctx
-	ChunkUpload files.IChunkUploadService
-	FileManager files.IFileManagerService
-	SQL         sqlite.Sqliter
-	WOL         wol.WOLInterface
-	Done        chan struct{}
+	Camera                    video.Camera
+	Streamer                  video.Streamer
+	Gadget                    otg.GadgetInterface
+	HID                       hid.KMHIDController
+	MSD                       otg.MSDInterface
+	CTX                       g.Ctx
+	ChunkUpload               files.IChunkUploadService
+	FileManager               files.IFileManagerService
+	MirrorsChunkUploadService mirrors.IMirrorsChunkUploadService
+	MirrorsManagerService     mirrors.IMirrorsManagerService
+	SQL                       sqlite.Sqliter
+	WOL                       wol.WOLInterface
+	Done                      chan struct{}
 }
 
 func New(rootPath string) {
@@ -40,6 +43,8 @@ func New(rootPath string) {
 	Svc.initVideo()
 	// 初始化文件管理
 	Svc.initFilesManager(rootPath)
+	// 初始化ISO镜像管理
+	Svc.initIsoManager(rootPath)
 	// 初始化数据库
 	Svc.initSqlite(rootPath)
 	// 初始化WOL
@@ -59,6 +64,11 @@ func (s *SVC) initSqlite(rootPath string) {
 func (s *SVC) initFilesManager(rootPath string) {
 	s.ChunkUpload = files.GetChunkUploadService(rootPath)
 	s.FileManager = files.GetFileManagerService(rootPath)
+}
+
+func (s *SVC) initIsoManager(rootPath string) {
+	s.MirrorsChunkUploadService = mirrors.GetMirrorsChunkUploadService(rootPath)
+	s.MirrorsManagerService = mirrors.GetMirrorsManagerService(rootPath)
 }
 
 func (s *SVC) initOTG() {

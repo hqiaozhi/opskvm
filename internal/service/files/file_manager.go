@@ -98,6 +98,9 @@ func (s *FileManagerService) validateAndCleanPath(targetPath string) (string, er
 		if strings.HasPrefix(part, ".") {
 			return "", fmt.Errorf("不支持隐藏文件或目录")
 		}
+		if containsSpecialChars(part) {
+			return "", fmt.Errorf("文件名包含特殊字符: %s", part)
+		}
 	}
 
 	fullPath := filepath.Join(s.storageDir, cleanPath)
@@ -108,6 +111,16 @@ func (s *FileManagerService) validateAndCleanPath(targetPath string) (string, er
 	}
 
 	return cleanPath, nil
+}
+
+func containsSpecialChars(s string) bool {
+	invalidChars := `!#$%^+={}[]|\\:;"'<>,?`
+	for _, c := range s {
+		if strings.ContainsRune(invalidChars, c) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *FileManagerService) ListFiles(targetPath string, page, limit int) (int, []FileInfo, error) {

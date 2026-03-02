@@ -1,29 +1,27 @@
-package files
+package mirrors
 
 import (
 	"context"
 	"encoding/base64"
 
-	v1 "opskvm/api/files/v1"
-	"opskvm/internal/service/files"
+	v1 "opskvm/api/mirrors/v1"
+	mirrorssvc "opskvm/internal/service/mirrors"
 )
 
 func (c *ControllerV1) InitUpload(ctx context.Context, req *v1.InitUploadReq) (res *v1.InitUploadRes, err error) {
-	var fileMetas []files.FileMeta
+	var Files []mirrorssvc.FileMeta
 	for _, f := range req.Files {
-		path := f.Path
-
-		if decoded, err := base64.StdEncoding.DecodeString(f.Path); err == nil {
-			path = string(decoded)
+		fileName := f.FileName
+		if decoded, err := base64.StdEncoding.DecodeString(f.FileName); err == nil {
+			fileName = string(decoded)
 		}
-
-		fileMetas = append(fileMetas, files.FileMeta{
-			Path: path,
-			Size: f.Size,
+		Files = append(Files, mirrorssvc.FileMeta{
+			FileName: fileName,
+			Size:     f.Size,
 		})
 	}
 
-	sessions, err := c.Files.SVC.ChunkUpload.InitUpload(fileMetas, req.ChunkSize)
+	sessions, err := c.mirrors.SVC.MirrorsChunkUploadService.InitUpload(Files, req.ChunkSize)
 	if err != nil {
 		return nil, err
 	}
@@ -32,12 +30,10 @@ func (c *ControllerV1) InitUpload(ctx context.Context, req *v1.InitUploadReq) (r
 	for _, s := range sessions {
 		uploads = append(uploads, v1.UploadSessionInfo{
 			UploadID:   s.UploadID,
-			Path:       s.Path,
 			FileName:   s.FileName,
 			FileSize:   s.FileSize,
 			ChunkSize:  s.ChunkSize,
 			ChunkCount: s.ChunkCount,
-			IsDir:      s.IsDir,
 		})
 	}
 

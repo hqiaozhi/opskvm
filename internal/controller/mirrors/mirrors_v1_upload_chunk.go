@@ -1,4 +1,4 @@
-package files
+package mirrors
 
 import (
 	"context"
@@ -7,13 +7,13 @@ import (
 
 	"github.com/gogf/gf/v2/net/ghttp"
 
-	v1 "opskvm/api/files/v1"
+	v1 "opskvm/api/mirrors/v1"
 )
 
 func (c *ControllerV1) UploadChunk(ctx context.Context, req *v1.UploadChunkReq) (res *v1.UploadChunkRes, err error) {
 	r := ghttp.RequestFromCtx(ctx)
 
-	svc := c.Files.SVC.ChunkUpload
+	svc := c.mirrors.SVC.MirrorsChunkUploadService
 	session, ok := svc.GetSession(req.UploadId)
 	if !ok {
 		return nil, fmt.Errorf("上传会话不存在: %s", req.UploadId)
