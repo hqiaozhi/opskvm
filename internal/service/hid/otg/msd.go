@@ -3,6 +3,7 @@ package otg
 import (
 	"errors"
 	"path/filepath"
+	"time"
 )
 
 type MSDInterface interface {
@@ -45,6 +46,7 @@ func (m *MSD) AddMSD() error {
 func (m *MSD) Bind(absoltePath, cdrom string) error {
 	// cdrom = 0 磁盘(flash) 可读可写
 	// cdrom = 1 光驱(cd/dvd) 只读
+	m.cdrom = cdrom
 	switch cdrom {
 	case "0":
 		m.ro = "0" // 可写
@@ -66,6 +68,11 @@ func (m *MSD) Bind(absoltePath, cdrom string) error {
 		return err
 	}
 	path3 := filepath.Join(m.funcPath, "lun.0/file")
+	err = m.Write(path3, "\n")
+	if err != nil {
+		return err
+	}
+	time.Sleep(1 * time.Second)
 	err = m.Write(path3, absoltePath)
 	if err != nil {
 		return err

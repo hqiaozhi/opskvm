@@ -138,3 +138,11 @@ type DeleteRes struct {
 	DeletedCount int      `json:"deleted_count" dc:"成功删除数量"`
 	FailedIds    []string `json:"failed_ids" dc:"删除失败的ID或路径"`
 }
+
+type MsdManagerReq struct {
+	g.Meta `path:"mirrors/msd" method:"post" sm:"虚拟介质" tags:"镜像管理"`
+	Path   string `json:"path" dc:"镜像路径"`
+	Mode   string `json:"mode" v:"required" dc:"挂载模式: 0(Flash)/1(CD/DVD)/2(取消挂载)"`
+}
+type MsdManagerRes struct {
+}

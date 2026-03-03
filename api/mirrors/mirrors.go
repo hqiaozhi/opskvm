@@ -20,4 +20,5 @@ type IMirrorsV1 interface {
 	GetUrlUploadStatus(ctx context.Context, req *v1.GetUrlUploadStatusReq) (res *v1.GetUrlUploadStatusRes, err error)
 	List(ctx context.Context, req *v1.ListReq) (res *v1.ListRes, err error)
 	Delete(ctx context.Context, req *v1.DeleteReq) (res *v1.DeleteRes, err error)
+	MsdManager(ctx context.Context, req *v1.MsdManagerReq) (res *v1.MsdManagerRes, err error)
 }
