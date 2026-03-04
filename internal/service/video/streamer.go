@@ -18,6 +18,7 @@ type Streamer interface {
 	Wait()
 	Pause()
 	Resume()
+	SetClientVideo(clientIndex int, sendVideo bool)
 
 	// CompressFrame 对视频帧进行JPEG压缩 - 未启用，延时太高
 	CompressFrame(frame []byte, quality int) ([]byte, error)
@@ -31,8 +32,9 @@ const (
 
 // Client 表示流客户端
 type Client struct {
-	i  int
-	Ch chan []byte
+	i         int
+	Ch        chan []byte
+	SendVideo bool // 是否发送视频帧
 }
 
 // MJPEGStreamer 是Streamer接口的MJPEG实现
@@ -70,8 +72,9 @@ func (s *MJPEGStreamer) AddClient() *Client {
 	}
 
 	clt := &Client{
-		i:  len(s.clients),
-		Ch: make(chan []byte, 1),
+		i:         len(s.clients),
+		Ch:        make(chan []byte, 1),
+		SendVideo: true,
 	}
 	clt.Ch <- s.Blank
 	s.clients = append(s.clients, clt)
@@ -209,6 +212,16 @@ func (s *MJPEGStreamer) Resume() {
 	defer s.mu.Unlock()
 	s.paused = false
 	log.Println("Stream resumed after config update")
+}
+
+func (s *MJPEGStreamer) SetClientVideo(clientIndex int, sendVideo bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if clientIndex >= 0 && clientIndex < len(s.clients) {
+		s.clients[clientIndex].SendVideo = sendVideo
+		log.Printf("Client %d video sending set to: %v", clientIndex, sendVideo)
+	}
 }
 
 // CompressFrame 对视频帧进行JPEG压缩

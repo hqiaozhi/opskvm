@@ -25,10 +25,11 @@ var upgrader = websocket.Upgrader{
 
 // WSMessageType WebSocket消息类型
 const (
-	WSMessageTypeVideo     WSMessageType = 0 // 视频流数据
-	WSMessageTypeKeyboard  WSMessageType = 1 // 键盘事件
-	WSMessageTypeMouse     WSMessageType = 2 // 鼠标事件
-	WSMessageTypeMouseMode WSMessageType = 3 // 鼠标模式切换
+	WSMessageTypeVideo        WSMessageType = 0 // 视频流数据
+	WSMessageTypeKeyboard     WSMessageType = 1 // 键盘事件
+	WSMessageTypeMouse        WSMessageType = 2 // 鼠标事件
+	WSMessageTypeMouseMode    WSMessageType = 3 // 鼠标模式切换
+	WSMessageTypeVideoControl WSMessageType = 4 // 视频控制
 )
 
 // WSMessageType WebSocket消息类型
@@ -36,8 +37,8 @@ type WSMessageType int
 
 // WSMessage WebSocket消息结构
 type WSMessage struct {
-	Type WSMessageType `json:"type"` // 消息类型
-	Data interface{}   `json:"data"` // 消息数据
+	Type interface{} `json:"type"` // 消息类型，可以是数字或字符串
+	Data interface{} `json:"data"` // 消息数据
 }
 
 // KeyboardData 键盘事件数据
@@ -58,6 +59,11 @@ type MouseData struct {
 // MouseModeData 鼠标模式切换数据
 type MouseModeData struct {
 	Absolute bool `json:"absolute"` // 是否为绝对模式
+}
+
+// VideoControlData 视频控制数据
+type VideoControlData struct {
+	Action string `json:"action"` // 操作: stop/start
 }
 
 func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.StreamRes, err error) {
@@ -95,7 +101,7 @@ func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.S
 			}
 
 			// 处理接收到的消息
-			c.handleWSMessage(ctx, message)
+			c.handleWSMessage(ctx, clt, message)
 		}
 	}()
 
@@ -105,6 +111,11 @@ func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.S
 		if !ok {
 			g.Log().Debugf(ctx, "[%s] Connection closed", gReq.GetClientIp())
 			return
+		}
+
+		// 检查客户端是否需要接收视频
+		if !clt.SendVideo {
+			continue
 		}
 
 		conn.SetWriteDeadline(time.Now().Add(time.Second))
@@ -126,7 +137,7 @@ func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.S
 }
 
 // handleWSMessage 处理WebSocket消息
-func (c *ControllerV1) handleWSMessage(ctx context.Context, message []byte) {
+func (c *ControllerV1) handleWSMessage(ctx context.Context, clt *video.Client, message []byte) {
 	// 记录原始消息，便于调试
 	g.Log().Printf(ctx, "Received WebSocket raw message: %s", string(message))
 
@@ -137,11 +148,37 @@ func (c *ControllerV1) handleWSMessage(ctx context.Context, message []byte) {
 		return
 	}
 
+	// 统一处理消息类型（支持数字或字符串）
+	var msgType WSMessageType
+	switch v := wsMsg.Type.(type) {
+	case float64:
+		msgType = WSMessageType(int(v))
+	case string:
+		switch v {
+		case "video":
+			msgType = WSMessageTypeVideo
+		case "keyboard":
+			msgType = WSMessageTypeKeyboard
+		case "mouse":
+			msgType = WSMessageTypeMouse
+		case "mouse_mode":
+			msgType = WSMessageTypeMouseMode
+		case "video_control":
+			msgType = WSMessageTypeVideoControl
+		default:
+			g.Log().Printf(ctx, "Unknown WebSocket message type string: %s", v)
+			return
+		}
+	default:
+		g.Log().Printf(ctx, "Unknown WebSocket message type: %T", wsMsg.Type)
+		return
+	}
+
 	// 记录消息类型
-	g.Log().Printf(ctx, "Received WebSocket message, type: %d", wsMsg.Type)
+	g.Log().Printf(ctx, "Received WebSocket message, type: %d", msgType)
 
 	// 根据消息类型处理
-	switch wsMsg.Type {
+	switch msgType {
 	case WSMessageTypeKeyboard:
 		// 处理键盘事件
 		var keyboardData KeyboardData
@@ -248,6 +285,42 @@ func (c *ControllerV1) handleWSMessage(ctx context.Context, message []byte) {
 	case WSMessageTypeVideo:
 		// 视频流数据，这里不需要处理，因为视频流是从服务器发送到客户端的
 		g.Log().Printf(ctx, "Received video stream data, ignoring")
+	case WSMessageTypeVideoControl:
+		// 处理视频控制消息
+		var videoControlData VideoControlData
+		if dataMap, ok := wsMsg.Data.(map[string]interface{}); ok {
+			dataBytes, err := json.Marshal(dataMap)
+			if err != nil {
+				g.Log().Printf(ctx, "Failed to marshal video control data: %v", err)
+				return
+			}
+			if err := json.Unmarshal(dataBytes, &videoControlData); err != nil {
+				g.Log().Printf(ctx, "Failed to unmarshal video control data: %v", err)
+				return
+			}
+		} else {
+			dataBytes, err := json.Marshal(wsMsg.Data)
+			if err != nil {
+				g.Log().Printf(ctx, "Failed to marshal video control data: %v", err)
+				return
+			}
+			if err := json.Unmarshal(dataBytes, &videoControlData); err != nil {
+				g.Log().Printf(ctx, "Failed to unmarshal video control data: %v", err)
+				return
+			}
+		}
+
+		g.Log().Printf(ctx, "Video control action: %s", videoControlData.Action)
+		switch videoControlData.Action {
+		case "stop":
+			clt.SendVideo = false
+			g.Log().Printf(ctx, "Video streaming stopped for this client")
+		case "start":
+			clt.SendVideo = true
+			g.Log().Printf(ctx, "Video streaming resumed for this client")
+		default:
+			g.Log().Printf(ctx, "Unknown video control action: %s", videoControlData.Action)
+		}
 	default:
 		g.Log().Printf(ctx, "Unknown WebSocket message type: %d", wsMsg.Type)
 	}
