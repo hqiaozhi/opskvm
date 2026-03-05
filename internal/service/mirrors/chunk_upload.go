@@ -2,6 +2,7 @@ package mirrors
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,7 @@ const (
 type FileMeta struct {
 	FileName string `json:"file_name"`
 	Size     int64  `json:"size"`
+	Md5      string `json:"md5"`
 }
 
 type UploadSession struct {
@@ -34,6 +36,8 @@ type UploadSession struct {
 	FinalPath   string        `json:"final_path" dc:"最终文件路径"`
 	File        *os.File      `json:"-" dc:"文件句柄"`
 	CreatedAt   time.Time     `json:"created_at" dc:"创建时间"`
+	FileMd5     string        `json:"file_md5" dc:"文件SHA256校验值"`
+	SkipUpload  bool          `json:"skip_upload" dc:"是否跳过上传（秒传）"`
 }
 
 type IMirrorsChunkUploadService interface {
@@ -123,10 +127,32 @@ func (s *ChunkUploadService) InitUpload(fileMetas []FileMeta, chunkSize int64) (
 			fmt.Printf("创建父目录失败: %s, err: %v\n", dirPath, err)
 		}
 
-		finalFile, err := os.OpenFile(finalPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			fmt.Printf("创建最终文件失败: %s, err: %v\n", finalPath, err)
-			continue
+		skipUpload := false
+		var finalFile *os.File
+		var err error
+		if meta.Md5 != "" {
+			if existsInfo, err := os.Stat(finalPath); err == nil {
+				if existsInfo.Size() == meta.Size {
+					existingSha256, err := s.calculateFileSha256(finalPath)
+					if err == nil && existingSha256 == meta.Md5 {
+						skipUpload = true
+						fmt.Printf("[InitUpload] 秒传: uploadId=%s, fileName=%s, size=%d, sha256=%s\n",
+							uploadID, meta.FileName, meta.Size, meta.Md5)
+					}
+				} else {
+					os.Remove(finalPath)
+					fmt.Printf("[InitUpload] 文件大小不匹配，删除旧文件: uploadId=%s, fileName=%s, oldSize=%d, newSize=%d\n",
+						uploadID, meta.FileName, existsInfo.Size(), meta.Size)
+				}
+			}
+		}
+
+		if !skipUpload {
+			finalFile, err = os.OpenFile(finalPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				fmt.Printf("创建最终文件失败: %s, err: %v\n", finalPath, err)
+				continue
+			}
 		}
 
 		session := UploadSession{
@@ -139,12 +165,16 @@ func (s *ChunkUploadService) InitUpload(fileMetas []FileMeta, chunkSize int64) (
 			FinalPath:   finalPath,
 			File:        finalFile,
 			CreatedAt:   time.Now(),
+			FileMd5:     meta.Md5,
+			SkipUpload:  skipUpload,
 		}
 
 		s.sessions[uploadID] = &session
 
-		fmt.Printf("[InitUpload] uploadId=%s, fileName=%s, size=%d, chunkCount=%d\n",
-			uploadID, meta.FileName, meta.Size, chunkCount)
+		if !skipUpload {
+			fmt.Printf("[InitUpload] uploadId=%s, fileName=%s, size=%d, chunkCount=%d\n",
+				uploadID, meta.FileName, meta.Size, chunkCount)
+		}
 
 		sessions = append(sessions, session)
 	}
@@ -200,6 +230,21 @@ func (s *ChunkUploadService) UploadChunk(ctx context.Context, uploadID string, c
 	return writtenSize, nil
 }
 
+func (s *ChunkUploadService) calculateFileSha256(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+}
+
 func (s *ChunkUploadService) CompleteUpload(ctx context.Context, uploadID string) (string, error) {
 	s.mu.RLock()
 	session, ok := s.sessions[uploadID]
@@ -209,8 +254,41 @@ func (s *ChunkUploadService) CompleteUpload(ctx context.Context, uploadID string
 		return "", fmt.Errorf("上传会话不存在: %s", uploadID)
 	}
 
+	if session.SkipUpload {
+		s.mu.Lock()
+		delete(s.sessions, uploadID)
+		s.mu.Unlock()
+		fmt.Printf("[CompleteUpload] 秒传完成, uploadId=%s, finalPath=%s\n", uploadID, session.FinalPath)
+		return session.FinalPath, nil
+	}
+
 	if len(session.UploadedMap) != session.ChunkCount {
 		return "", fmt.Errorf("分块未全部上传: 已上传 %d/%d", len(session.UploadedMap), session.ChunkCount)
+	}
+
+	filePath := session.FinalPath
+
+	calculatedSha256, err := s.calculateFileSha256(filePath)
+	if err != nil {
+		session.File.Close()
+		session.File = nil
+		os.Remove(filePath)
+		s.mu.Lock()
+		delete(s.sessions, uploadID)
+		s.mu.Unlock()
+		return "", fmt.Errorf("计算文件SHA256失败: %v", err)
+	}
+
+	if calculatedSha256 != session.FileMd5 {
+		session.File.Close()
+		session.File = nil
+		os.Remove(filePath)
+		s.mu.Lock()
+		delete(s.sessions, uploadID)
+		s.mu.Unlock()
+		fmt.Printf("[CompleteUpload] SHA256不一致，上传失败！uploadId=%s, expectedSha256=%s, calculatedSha256=%s\n",
+			uploadID, session.FileMd5, calculatedSha256)
+		return "", fmt.Errorf("SHA256不一致，上传失败！")
 	}
 
 	s.mu.Lock()
@@ -219,9 +297,9 @@ func (s *ChunkUploadService) CompleteUpload(ctx context.Context, uploadID string
 	delete(s.sessions, uploadID)
 	s.mu.Unlock()
 
-	fmt.Printf("[CompleteUpload] 完成, uploadId=%s, finalPath=%s\n", uploadID, session.FinalPath)
+	fmt.Printf("[CompleteUpload] 完成, uploadId=%s, finalPath=%s, sha256=%s\n", uploadID, filePath, calculatedSha256)
 
-	return session.FinalPath, nil
+	return filePath, nil
 }
 
 func (s *ChunkUploadService) CancelUpload(ctx context.Context, uploadID string) error {
@@ -233,6 +311,9 @@ func (s *ChunkUploadService) CancelUpload(ctx context.Context, uploadID string) 
 		return fmt.Errorf("上传会话不存在: %s", uploadID)
 	}
 
+	fmt.Printf("[CancelUpload] 开始取消上传: uploadId=%s, finalPath=%s, skipUpload=%v, file=nil(%v)\n",
+		uploadID, session.FinalPath, session.SkipUpload, session.File == nil)
+
 	if session.File != nil {
 		session.File.Close()
 	}
@@ -242,10 +323,14 @@ func (s *ChunkUploadService) CancelUpload(ctx context.Context, uploadID string) 
 	s.mu.Unlock()
 
 	if session.FinalPath != "" {
-		os.Remove(session.FinalPath)
+		if err := os.Remove(session.FinalPath); err == nil {
+			fmt.Printf("[CancelUpload] 已删除文件: uploadId=%s, path=%s\n", uploadID, session.FinalPath)
+		} else {
+			fmt.Printf("[CancelUpload] 删除文件失败: uploadId=%s, path=%s, err=%v\n", uploadID, session.FinalPath, err)
+		}
 	}
 
-	fmt.Printf("[CancelUpload] uploadId=%s\n", uploadID)
+	fmt.Printf("[CancelUpload] 完成: uploadId=%s\n", uploadID)
 
 	return nil
 }

@@ -4,15 +4,16 @@ import (
 	"github.com/gogf/gf/v2/frame/g"
 )
 
-type FileMeta struct {
-	Path string `json:"path" v:"required" dc:"文件路径（含目录），如 folder/file.txt"`
-	Size int64  `json:"size" v:"required" dc:"文件大小（字节）"`
-}
-
 type InitUploadReq struct {
 	g.Meta    `path:"files/upload/init" method:"post" sm:"初始化分块上传" tags:"文件管理"`
 	Files     []FileMeta `json:"files" v:"required" dc:"文件列表，支持多文件和目录"`
 	ChunkSize int64      `json:"chunk_size" dc:"分块大小（字节），默认 5MB"`
+}
+
+type FileMeta struct {
+	Path string `json:"path" v:"required" dc:"文件路径（含目录），如 folder/file.txt"`
+	Size int64  `json:"size" v:"required" dc:"文件大小（字节）"`
+	Md5  string `json:"md5" v:"required" dc:"文件MD5校验值"`
 }
 
 type UploadSessionInfo struct {
@@ -23,6 +24,8 @@ type UploadSessionInfo struct {
 	ChunkSize  int64  `json:"chunk_size" dc:"分块大小"`
 	ChunkCount int    `json:"chunk_count" dc:"总分块数"`
 	IsDir      bool   `json:"is_dir" dc:"是否为目录"`
+	FileMd5    string `json:"file_md5" dc:"文件SHA256校验值"`
+	SkipUpload bool   `json:"skip_upload" dc:"是否跳过上传（秒传）"`
 }
 
 type InitUploadRes struct {

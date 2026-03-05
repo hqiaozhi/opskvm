@@ -7,6 +7,7 @@ import (
 type FileMeta struct {
 	FileName string `json:"file_name" v:"required" dc:"文件名，如 ubuntu-22.04."`
 	Size     int64  `json:"size" v:"required" dc:"文件大小（字节）"`
+	Md5      string `json:"md5" v:"required" dc:"文件MD5校验值"`
 }
 
 type InitUploadReq struct {
@@ -21,6 +22,8 @@ type UploadSessionInfo struct {
 	FileSize   int64  `json:"file_size" dc:"文件大小"`
 	ChunkSize  int64  `json:"chunk_size" dc:"分块大小"`
 	ChunkCount int    `json:"chunk_count" dc:"总分块数"`
+	FileMd5    string `json:"file_md5" dc:"文件SHA256校验值"`
+	SkipUpload bool   `json:"skip_upload" dc:"是否跳过上传（秒传）"`
 }
 
 type InitUploadRes struct {

@@ -18,6 +18,7 @@ func (c *ControllerV1) InitUpload(ctx context.Context, req *v1.InitUploadReq) (r
 		Files = append(Files, mirrorssvc.FileMeta{
 			FileName: fileName,
 			Size:     f.Size,
+			Md5:      f.Md5,
 		})
 	}
 
@@ -34,6 +35,8 @@ func (c *ControllerV1) InitUpload(ctx context.Context, req *v1.InitUploadReq) (r
 			FileSize:   s.FileSize,
 			ChunkSize:  s.ChunkSize,
 			ChunkCount: s.ChunkCount,
+			FileMd5:    s.FileMd5,
+			SkipUpload: s.SkipUpload,
 		})
 	}
 

@@ -20,6 +20,7 @@ func (c *ControllerV1) InitUpload(ctx context.Context, req *v1.InitUploadReq) (r
 		fileMetas = append(fileMetas, files.FileMeta{
 			Path: path,
 			Size: f.Size,
+			Md5:  f.Md5,
 		})
 	}
 
@@ -38,6 +39,8 @@ func (c *ControllerV1) InitUpload(ctx context.Context, req *v1.InitUploadReq) (r
 			ChunkSize:  s.ChunkSize,
 			ChunkCount: s.ChunkCount,
 			IsDir:      s.IsDir,
+			FileMd5:    s.FileMd5,
+			SkipUpload: s.SkipUpload,
 		})
 	}
 
