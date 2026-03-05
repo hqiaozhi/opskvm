@@ -8,6 +8,7 @@ import (
 	"opskvm/internal/controller/system"
 	"opskvm/internal/controller/users"
 	"opskvm/internal/controller/wake"
+	"opskvm/internal/controller/webshell"
 	"opskvm/internal/service"
 	fileService "opskvm/internal/service/files"
 	"time"
@@ -90,6 +91,7 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 			system.NewV1(),
 			wake.NewV1(),
 			mirrors.NewV1(),
+			webshell.NewV1(),
 		)
 	})
 
