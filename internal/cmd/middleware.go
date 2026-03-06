@@ -14,8 +14,16 @@ func MiddlewareCORS(r *ghttp.Request) {
 }
 
 func MiddlewareAuth(r *ghttp.Request) {
-	// 登录接口不校验token
-	if r.URL.Path == "/api/v1/users/login" {
+	// 登录接口和注册接口不校验token
+	noAuthPaths := []string{"/api/v1/users/login", "/api/v1/users/register"}
+	isNoAuth := false
+	for _, path := range noAuthPaths {
+		if r.URL.Path == path {
+			isNoAuth = true
+			break
+		}
+	}
+	if isNoAuth {
 		r.Middleware.Next()
 		return
 	}
