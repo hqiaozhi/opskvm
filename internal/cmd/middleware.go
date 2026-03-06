@@ -47,5 +47,6 @@ func MiddlewareAuth(r *ghttp.Request) {
 
 	r.SetParam("userid", claims.UserID)
 	r.SetParam("username", claims.Username)
+	r.SetCtxVar("token", token)
 	r.Middleware.Next()
 }

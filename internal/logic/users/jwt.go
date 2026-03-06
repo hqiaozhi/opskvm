@@ -5,12 +5,15 @@ import (
 	"time"
 
 	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/os/gcache"
 	"github.com/gogf/gf/v2/os/gcmd"
 	"github.com/gogf/gf/v2/os/gctx"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 var ctx = gctx.New()
+
+var tokenBlacklist = gcache.New()
 
 // 自定义 Claims（包含标准 Claims + 业务字段）
 // 可根据业务需求添加额外字段（如 UserID、Username、Role 等）
@@ -116,6 +119,11 @@ func (s *JwtService) GenerateRefreshToken(userID string) (string, error) {
 // ValidateAccessToken 验证访问令牌的合法性（签名、过期时间、签发者、受众）
 // 返回解析后的 CustomClaims，供业务使用
 func (s *JwtService) ValidateAccessToken(tokenStr string) (*CustomClaims, error) {
+	// 检查黑名单
+	if s.IsInBlacklist(tokenStr) {
+		return nil, errors.New("token 已失效")
+	}
+
 	// 1. 定义验证函数（校验签名 + 标准 Claims）
 	token, err := jwt.ParseWithClaims(
 		tokenStr,
@@ -208,4 +216,29 @@ func wrapJWTError(err error) error {
 	default:
 		return errors.New("token 验证失败：" + err.Error())
 	}
+}
+
+// --------------- Token 黑名单功能 ---------------
+func (s *JwtService) AddToBlacklist(token string, expireTime time.Duration) {
+	tokenBlacklist.Set(ctx, token, true, expireTime)
+}
+
+func (s *JwtService) IsInBlacklist(token string) bool {
+	v, err := tokenBlacklist.Get(ctx, token)
+	if err != nil {
+		return false
+	}
+	return v.Bool()
+}
+
+func (s *JwtService) GetTokenExpireTime(tokenStr string) (time.Time, error) {
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenStr, &CustomClaims{})
+	if err != nil {
+		return time.Time{}, err
+	}
+	claims, ok := token.Claims.(*CustomClaims)
+	if !ok {
+		return time.Time{}, errors.New("invalid token claims")
+	}
+	return claims.ExpiresAt.Time, nil
 }
