@@ -3,6 +3,7 @@ package cmd
 import (
 	"strings"
 
+	"opskvm/internal/logic/totp"
 	"opskvm/internal/logic/users"
 
 	"github.com/gogf/gf/v2/net/ghttp"
@@ -14,8 +15,10 @@ func MiddlewareCORS(r *ghttp.Request) {
 }
 
 func MiddlewareAuth(r *ghttp.Request) {
-	// 登录接口和注册接口不校验token
-	noAuthPaths := []string{"/api/v1/users/login", "/api/v1/users/register"}
+	noAuthPaths := []string{
+		"/api/v1/users/login",
+		"/api/v1/users/register",
+	}
 	isNoAuth := false
 	for _, path := range noAuthPaths {
 		if r.URL.Path == path {
@@ -27,7 +30,7 @@ func MiddlewareAuth(r *ghttp.Request) {
 		r.Middleware.Next()
 		return
 	}
-	// WebSocket 连接：通过 HTTP API 先获取 sessionId（已验证 token），WebSocket 跳过 token 验证
+
 	if r.Header.Get("Upgrade") == "websocket" {
 		r.Middleware.Next()
 		return
@@ -53,8 +56,19 @@ func MiddlewareAuth(r *ghttp.Request) {
 		r.Exit()
 	}
 
-	r.SetParam("userid", claims.UserID)
+	userId := claims.UserID
+	r.SetParam("userid", userId)
 	r.SetParam("username", claims.Username)
 	r.SetCtxVar("token", token)
+
+	userIdInt := jwtService.GetUserIdInt(claims)
+	needTotp, err := totp.TotpInstance.NeedTotp(r.Context(), userIdInt)
+	if err == nil && needTotp {
+		if !totp.TotpInstance.IsVerified(r.Context(), userIdInt) {
+			r.Response.WriteStatus(403, "TOTP verification required")
+			r.Exit()
+		}
+	}
+
 	r.Middleware.Next()
 }

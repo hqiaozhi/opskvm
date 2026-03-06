@@ -9,23 +9,32 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func (u *Users) Login(ctx context.Context, username, password string) (int, error) {
+type LoginResult struct {
+	UserId           int
+	Username         string
+	TwoFactorEnabled bool
+}
 
+func (u *Users) Login(ctx context.Context, username, password string) (*LoginResult, error) {
 	var user entity.Users
 	err := dao.Users.Ctx(ctx).Where("username", username).Scan(&user)
 	if err != nil {
-		return 0, gerror.New("username or password error")
+		return nil, gerror.New("username or password error")
 	}
 
-	if user.Username != username {
-		return 0, gerror.New("username do not exist")
+	if user.Username == "" {
+		return nil, gerror.New("username do not exist")
 	}
 
 	if !u.CheckPassword(password, user.Password) {
-		return 0, gerror.New("username or password error")
+		return nil, gerror.New("username or password error")
 	}
 
-	return user.Id, nil
+	return &LoginResult{
+		UserId:           user.Id,
+		Username:         user.Username,
+		TwoFactorEnabled: user.TwoFactorEnabled == 1,
+	}, nil
 }
 
 func (u *Users) HashPassword(password string) (string, error) {

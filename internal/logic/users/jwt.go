@@ -1,7 +1,9 @@
 package users
 
 import (
+	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/gogf/gf/v2/frame/g"
@@ -241,4 +243,25 @@ func (s *JwtService) GetTokenExpireTime(tokenStr string) (time.Time, error) {
 		return time.Time{}, errors.New("invalid token claims")
 	}
 	return claims.ExpiresAt.Time, nil
+}
+
+func (s *JwtService) GetUserIdInt(claims *CustomClaims) int {
+	userId, _ := strconv.Atoi(claims.UserID)
+	return userId
+}
+
+func (s *JwtService) GetUserIdFromCtx(ctx context.Context) int {
+	tokenStr := g.RequestFromCtx(ctx).Header.Get("Authorization")
+	if tokenStr == "" {
+		return 0
+	}
+	if len(tokenStr) > 7 && tokenStr[:7] == "Bearer " {
+		tokenStr = tokenStr[7:]
+	}
+	claims, err := s.ValidateAccessToken(tokenStr)
+	if err != nil {
+		return 0
+	}
+	userId, _ := strconv.Atoi(claims.UserID)
+	return userId
 }

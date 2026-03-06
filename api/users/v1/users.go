@@ -9,7 +9,8 @@ type LoginReq struct {
 }
 
 type LoginRes struct {
-	Token string `json:"token" dc:"在需要鉴权的接口中header加入Authorization: token"`
+	Token        string `json:"token" dc:"访问令牌"`
+	TotpRequired bool   `json:"totpRequired" dc:"是否需要TOTP验证"`
 }
 
 type LogoutReq struct {

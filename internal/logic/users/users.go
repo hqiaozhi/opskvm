@@ -1,6 +1,5 @@
 package users
 
-
 var JwtInstance = NewJWT()
 
 type Users struct {

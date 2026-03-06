@@ -6,6 +6,7 @@ import (
 	"opskvm/internal/controller/kvm"
 	"opskvm/internal/controller/mirrors"
 	"opskvm/internal/controller/system"
+	"opskvm/internal/controller/totp"
 	"opskvm/internal/controller/users"
 	"opskvm/internal/controller/wake"
 	"opskvm/internal/controller/webshell"
@@ -92,6 +93,7 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 			wake.NewV1(),
 			mirrors.NewV1(),
 			webshell.NewV1(),
+			totp.NewV1(),
 		)
 	})
 
