@@ -2,14 +2,15 @@ package webshell
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 
 	v1 "opskvm/api/webshell/v1"
 	"opskvm/internal/logic/webshell"
 
+	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -39,7 +40,18 @@ func (c *ControllerV1) Shell(ctx context.Context, req *v1.ShellReq) (res *v1.She
 
 	sessionId := req.SessionId
 	if sessionId == "" {
-		sessionId = uuid.New().String()
+		gReq.Response.WriteHeader(http.StatusBadRequest)
+		g.Log().Errorf(ctx, "sessionid is required")
+		return nil, fmt.Errorf("sessionid is required")
+	}
+
+	terminalsLock.RLock()
+	_, exists := terminals[sessionId]
+	terminalsLock.RUnlock()
+
+	if !exists {
+		gReq.Response.WriteHeader(http.StatusForbidden)
+		return nil, fmt.Errorf("invalid sessionid")
 	}
 
 	gReq.Response.Header().Set("X-Session-Id", sessionId)
