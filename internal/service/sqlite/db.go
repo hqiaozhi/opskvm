@@ -6,6 +6,7 @@ import (
 
 	"github.com/gogf/gf/v2/database/gdb"
 	"github.com/gogf/gf/v2/frame/g"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Sqliter interface {
@@ -14,6 +15,16 @@ type Sqliter interface {
 
 type Sqlite struct {
 	RootPath string
+}
+
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(bytes), err
+}
+
+func CheckPassword(password, hashPassword string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hashPassword), []byte(password))
+	return err == nil
 }
 
 func NewSqlite(RootPath string) Sqliter {
@@ -41,6 +52,26 @@ func (s *Sqlite) IintTable() {
 
 	// 创建用户表
 	_, err := db1.Exec(ctx, getUserSql())
+	if err != nil {
+		g.Log().Error(ctx, err)
+	}
+
+	// 创建默认管理员用户
+	user_name := g.Cfg().MustGetWithCmd(ctx, `username`, "admin")
+	if user_name == nil {
+		user_name = g.Cfg().MustGetWithCmd(ctx, `u`, "admin")
+	}
+
+	pass_word := g.Cfg().MustGetWithCmd(ctx, `password`, "admin123")
+	if pass_word == nil {
+		pass_word = g.Cfg().MustGetWithCmd(ctx, `p`, "admin123")
+	}
+	hashedPassword, err := HashPassword(pass_word.String())
+	if err != nil {
+		g.Log().Error(ctx, err)
+		return
+	}
+	_, err = db1.Exec(ctx, getCreateDefaultUserSql(user_name.String(), hashedPassword, true))
 	if err != nil {
 		g.Log().Error(ctx, err)
 	}
