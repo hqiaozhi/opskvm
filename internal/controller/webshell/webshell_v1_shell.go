@@ -45,31 +45,18 @@ func (c *ControllerV1) Shell(ctx context.Context, req *v1.ShellReq) (res *v1.She
 		return nil, fmt.Errorf("sessionid is required")
 	}
 
-	terminalsLock.RLock()
-	_, exists := terminals[sessionId]
-	terminalsLock.RUnlock()
+	sessionsLock.RLock()
+	_, exists := sessions[sessionId]
+	sessionsLock.RUnlock()
 
 	if !exists {
 		gReq.Response.WriteHeader(http.StatusForbidden)
 		return nil, fmt.Errorf("invalid sessionid")
 	}
 
-	gReq.Response.Header().Set("X-Session-Id", sessionId)
-
-	res = &v1.ShellRes{
-		SessionId: sessionId,
-	}
-
-	terminalsLock.RLock()
-	existingTerm, exists := terminals[sessionId]
-	terminalsLock.RUnlock()
-
-	if exists {
-		terminalsLock.Lock()
-		delete(terminals, sessionId)
-		terminalsLock.Unlock()
-		existingTerm.Pt.Close()
-	}
+	sessionsLock.Lock()
+	delete(sessions, sessionId)
+	sessionsLock.Unlock()
 
 	term := &Terminal{
 		ID:   sessionId,
