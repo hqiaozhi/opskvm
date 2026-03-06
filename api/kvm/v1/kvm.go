@@ -13,11 +13,22 @@ type Config struct {
 
 // StreamReq WebSocket 流请求
 type StreamReq struct {
-	g.Meta `path:"video" method:"get" sm:"视频流" tags:"kvm管理"`
+	g.Meta    `path:"video" method:"get" sm:"视频流" tags:"kvm管理"`
+	SessionId string `json:"ssid" dc:"Session ID，用于后续请求"`
 }
 
 // StreamRes WebSocket 流响应
 type StreamRes struct {
+}
+
+// CreateSessionReq 创建Session请求
+type CreateSessionReq struct {
+	g.Meta `path:"video/session" method:"post" sm:"创建视频流Session" tags:"kvm管理"`
+}
+
+// CreateSessionRes 创建Session响应
+type CreateSessionRes struct {
+	SessionId string `json:"ssid" dc:"Session ID，用于后续请求"`
 }
 
 // TurnOnReq 开启摄像头请求

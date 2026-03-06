@@ -3,6 +3,7 @@ package kvm
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -14,10 +15,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// 定义WS升级器（全局，可配置跨域、缓冲区等）
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // 生产环境需限制跨域
+		return true
 	},
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -68,6 +68,26 @@ type VideoControlData struct {
 
 func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.StreamRes, err error) {
 	gReq := ghttp.RequestFromCtx(ctx)
+
+	sessionId := req.SessionId
+	if sessionId == "" {
+		gReq.Response.WriteHeader(http.StatusBadRequest)
+		g.Log().Errorf(ctx, "sessionid is required")
+		return nil, fmt.Errorf("sessionid is required")
+	}
+
+	sessionsLock.RLock()
+	_, exists := sessions[sessionId]
+	sessionsLock.RUnlock()
+
+	if !exists {
+		gReq.Response.WriteHeader(http.StatusForbidden)
+		return nil, fmt.Errorf("invalid sessionid")
+	}
+
+	sessionsLock.Lock()
+	delete(sessions, sessionId)
+	sessionsLock.Unlock()
 
 	// 连接的时候打开摄像头
 	err = c.kvm.SVC.Camera.TurnOn()

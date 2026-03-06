@@ -12,6 +12,7 @@ import (
 
 type IKvmV1 interface {
 	Stream(ctx context.Context, req *v1.StreamReq) (res *v1.StreamRes, err error)
+	CreateSession(ctx context.Context, req *v1.CreateSessionReq) (res *v1.CreateSessionRes, err error)
 	TurnOn(ctx context.Context, req *v1.TurnOnReq) (res *v1.TurnOnRes, err error)
 	TurnOff(ctx context.Context, req *v1.TurnOffReq) (res *v1.TurnOffRes, err error)
 	GetConfig(ctx context.Context, req *v1.GetConfigReq) (res *v1.GetConfigRes, err error)
