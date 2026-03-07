@@ -23,11 +23,11 @@ func (u *Users) GetUserInfo(ctx context.Context, userId int) (*UserInfo, error) 
 	cls := dao.Users.Columns()
 	err := dao.Users.Ctx(ctx).Where(cls.Id, userId).Scan(&user)
 	if err != nil {
-		return nil, gerror.New("database query error")
+		return nil, gerror.Newf("database query error: %s", err.Error())
 	}
 
 	if user.Id == 0 {
-		return nil, gerror.New("user not found")
+		return nil, gerror.Newf("user not found")
 	}
 
 	return &UserInfo{

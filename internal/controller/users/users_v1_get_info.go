@@ -21,8 +21,7 @@ func (c *ControllerV1) GetUserInfo(ctx context.Context, req *v1.GetUserInfoReq) 
 	if !isAdmin && currentUserId != req.UserId {
 		return nil, gerror.New("permission denied")
 	}
-
-	userInfo, err := c.users.GetUserInfo(ctx, req.UserId)
+	userInfo, err := c.users.GetUserInfo(ctx, currentUserId)
 	if err != nil {
 		return nil, err
 	}
