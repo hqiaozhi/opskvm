@@ -10,7 +10,7 @@ import (
 )
 
 type Sqliter interface {
-	InitSqlite()
+	InitSqlite(debug bool)
 }
 
 type Sqlite struct {
@@ -27,19 +27,19 @@ func CheckPassword(password, hashPassword string) bool {
 	return err == nil
 }
 
-func NewSqlite(RootPath string) Sqliter {
+func NewSqlite(RootPath string, debug bool) Sqliter {
 	Sqlite := &Sqlite{
 		RootPath: RootPath,
 	}
-	Sqlite.InitSqlite()
+	Sqlite.InitSqlite(debug)
 	Sqlite.IintTable()
 	return Sqlite
 }
 
-func (s *Sqlite) InitSqlite() {
+func (s *Sqlite) InitSqlite(debug bool) {
 	dbConfig := gdb.ConfigNode{
 		Link:  fmt.Sprintf("sqlite::@file(%sdb.sqlite3)", s.RootPath),
-		Debug: true,
+		Debug: debug,
 	}
 	// 注册数据库配置（分组名 default）
 	gdb.AddConfigNode("default", dbConfig)

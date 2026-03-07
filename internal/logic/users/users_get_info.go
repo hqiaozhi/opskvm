@@ -56,9 +56,10 @@ func (u *Users) GetUserById(ctx context.Context, userId int) (*entity.Users, err
 
 func (u *Users) IsAdmin(ctx context.Context, userId int) (bool, error) {
 	var user entity.Users
-	err := dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
+	cls := dao.Users.Columns()
+	err := dao.Users.Ctx(ctx).Where(cls.Id, userId).Scan(&user)
 	if err != nil {
-		return false, gerror.New("database query error")
+		return false, nil
 	}
 
 	if user.IsAdmin == 0 {

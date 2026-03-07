@@ -86,12 +86,3 @@ type DeleteUserReq struct {
 
 type DeleteUserRes struct {
 }
-
-type ResetPasswordReq struct {
-	g.Meta      `path:"users/resetPassword" method:"post" sm:"重置密码" tags:"用户管理"`
-	UserId      int    `json:"userId" v:"required" dc:"用户ID"`
-	NewPassword string `json:"newPassword" v:"required|length:6,16" dc:"新密码"`
-}
-
-type ResetPasswordRes struct {
-}

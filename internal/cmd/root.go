@@ -72,7 +72,7 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 	}
 
 	// 初始化Service
-	service.New(in.RootPath)
+	service.New(in.RootPath, in.Debug)
 
 	s := g.Server()
 
@@ -85,7 +85,7 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 	s.AddStaticPath("/downloads", staticDir)
 
 	s.Group("/api/v1", func(group *ghttp.RouterGroup) {
-		group.Middleware(ghttp.MiddlewareHandlerResponse, MiddlewareCORS, MiddlewareAuth)
+		group.Middleware(ghttp.MiddlewareHandlerResponse, MiddlewareCORS)
 		group.Bind(
 			kvm.NewV1(),
 			users.NewV1(),

@@ -35,7 +35,7 @@ type SVC struct {
 	Done                      chan struct{}
 }
 
-func New(rootPath string) {
+func New(rootPath string, debug bool) {
 	Svc = &SVC{}
 	// 初始化OTG
 	Svc.initOTG()
@@ -46,7 +46,7 @@ func New(rootPath string) {
 	// 初始化ISO镜像管理
 	Svc.initIsoManager(rootPath)
 	// 初始化数据库
-	Svc.initSqlite(rootPath)
+	Svc.initSqlite(rootPath, debug)
 	// 初始化WOL
 	Svc.WOL = wol.NewWOL()
 	// 启动服务中断处理
@@ -57,8 +57,8 @@ func New(rootPath string) {
 	Svc.Done = done
 }
 
-func (s *SVC) initSqlite(rootPath string) {
-	s.SQL = sqlite.NewSqlite(rootPath)
+func (s *SVC) initSqlite(rootPath string, debug bool) {
+	s.SQL = sqlite.NewSqlite(rootPath, debug)
 }
 
 func (s *SVC) initFilesManager(rootPath string) {
