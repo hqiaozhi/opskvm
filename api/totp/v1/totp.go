@@ -3,7 +3,7 @@ package v1
 import "github.com/gogf/gf/v2/frame/g"
 
 type SetupReq struct {
-	g.Meta `path:"totp/setup" method:"post" sm:"生成TOTP密钥" tags:"TOTP二次验证"`
+	g.Meta `path:"totp/setup" method:"post" sm:"生成TOTP密钥" tags:"两步验证"`
 }
 
 type SetupRes struct {
@@ -12,8 +12,8 @@ type SetupRes struct {
 }
 
 type EnableReq struct {
-	g.Meta `path:"totp/enable" method:"post" sm:"确认启用TOTP" tags:"TOTP二次验证"`
-	Code   string `json:"code" v:"required|len:6" dc:"6位验证码(从验证器获取)"`
+	g.Meta `path:"totp/enable" method:"post" sm:"确认启用TOTP" tags:"两步验证"`
+	Code   string `json:"code" v:"required|size:6" dc:"6位验证码(从验证器获取)"`
 }
 
 type EnableRes struct {
@@ -22,8 +22,8 @@ type EnableRes struct {
 }
 
 type VerifyReq struct {
-	g.Meta `path:"totp/verify" method:"post" sm:"验证TOTP" tags:"TOTP二次验证"`
-	Code   string `json:"code" v:"required|len:6" dc:"6位验证码"`
+	g.Meta `path:"totp/verify" method:"post" sm:"验证TOTP" tags:"两步验证"`
+	Code   string `json:"code" v:"required|size:6" dc:"6位验证码"`
 }
 
 type VerifyRes struct {
@@ -32,8 +32,8 @@ type VerifyRes struct {
 }
 
 type DisableReq struct {
-	g.Meta   `path:"totp/disable" method:"post" sm:"禁用TOTP" tags:"TOTP二次验证"`
-	Code     string `json:"code" v:"required|len:6" dc:"6位验证码(验证通过后禁用)"`
+	g.Meta   `path:"totp/disable" method:"post" sm:"禁用TOTP" tags:"两步验证"`
+	Code     string `json:"code" v:"required|size:6" dc:"6位验证码(验证通过后禁用)"`
 	Password string `json:"password" v:"required" dc:"密码(二次确认)"`
 }
 
@@ -43,7 +43,7 @@ type DisableRes struct {
 }
 
 type StatusReq struct {
-	g.Meta `path:"totp/status" method:"get" sm:"查询状态" tags:"TOTP二次验证"`
+	g.Meta `path:"totp/status" method:"get" sm:"查询状态" tags:"两步验证"`
 }
 
 type StatusRes struct {

@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"opskvm/internal/dao"
+	"opskvm/internal/model/do"
 	"opskvm/internal/model/entity"
 
 	"github.com/gogf/gf/v2/errors/gerror"
@@ -30,7 +31,7 @@ func (u *Users) ChangePassword(ctx context.Context, userId int, oldPassword, new
 		return gerror.New("password encryption failed")
 	}
 
-	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(entity.Users{
+	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(do.Users{
 		Password:  string(hashedPassword),
 		UpdatedAt: gtime.Now(),
 	}).Update()

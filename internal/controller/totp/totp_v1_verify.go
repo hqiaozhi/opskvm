@@ -6,6 +6,7 @@ import (
 	v1 "opskvm/api/totp/v1"
 	"opskvm/internal/logic/users"
 
+	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 )
 
@@ -25,10 +26,7 @@ func (c *ControllerV1) Verify(ctx context.Context, req *v1.VerifyReq) (res *v1.V
 			tokenStr = tokenStr[7:]
 			users.JwtInstance.AddToBlacklist(tokenStr, users.JwtInstance.ExpireHours)
 		}
-		return &v1.VerifyRes{
-			Success: false,
-			Message: err.Error(),
-		}, nil
+		return nil, gerror.New(err.Error())
 	}
 
 	if !success {
@@ -37,10 +35,7 @@ func (c *ControllerV1) Verify(ctx context.Context, req *v1.VerifyReq) (res *v1.V
 			tokenStr = tokenStr[7:]
 			users.JwtInstance.AddToBlacklist(tokenStr, users.JwtInstance.ExpireHours)
 		}
-		return &v1.VerifyRes{
-			Success: false,
-			Message: "invalid code",
-		}, nil
+		return nil, gerror.New("invalid code")
 	}
 
 	return &v1.VerifyRes{

@@ -3,6 +3,7 @@ package totp
 import (
 	"context"
 	"opskvm/internal/dao"
+	"opskvm/internal/model/do"
 	"opskvm/internal/model/entity"
 
 	"github.com/gogf/gf/v2/errors/gerror"
@@ -26,11 +27,13 @@ func (t *Totp) Enable(ctx context.Context, userId int, secret, code string) erro
 		return gerror.New("invalid TOTP code, please ensure your device time is correct")
 	}
 
-	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(map[string]interface{}{
-		"two_factor_secret":  secret,
-		"two_factor_enabled": 1,
-		"updated_at":         gtime.Now(),
-	}).Update()
+	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(
+		do.Users{
+			TotpSecret:       secret,
+			TwoFactorEnabled: 1,
+			UpdatedAt:        gtime.Now(),
+		},
+	).Update()
 	if err != nil {
 		return gerror.New("failed to enable TOTP")
 	}

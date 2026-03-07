@@ -61,8 +61,8 @@ func (u *Users) IsAdmin(ctx context.Context, userId int) (bool, error) {
 		return false, gerror.New("database query error")
 	}
 
-	if user.Id == 0 {
-		return false, gerror.New("user not found")
+	if user.IsAdmin == 0 {
+		return false, nil
 	}
 
 	return user.IsAdmin == 1, nil

@@ -2,21 +2,34 @@ package users
 
 import (
 	"context"
-	v1 "opskvm/api/users/v1"
-	"strconv"
 
-	"github.com/gogf/gf/v2/net/ghttp"
+	v1 "opskvm/api/users/v1"
+
+	"github.com/gogf/gf/v2/errors/gerror"
 )
 
 func (c *ControllerV1) UpdateProfile(ctx context.Context, req *v1.UpdateProfileReq) (res *v1.UpdateProfileRes, err error) {
-	r := ghttp.RequestFromCtx(ctx)
-	userIdStr := r.GetParam("userid")
-	userId, err := strconv.Atoi(userIdStr.String())
+	currentUserId := c.users.JWT.GetUserIdFromCtx(ctx)
+	if currentUserId == 0 {
+		return nil, gerror.New("未登录或token无效")
+	}
+
+	isAdmin, err := c.users.IsAdmin(ctx, currentUserId)
 	if err != nil {
 		return nil, err
 	}
 
-	err = c.users.UpdateProfile(ctx, userId, req.Nickname, req.Email)
+	var targetUserId int
+	if isAdmin {
+		if req.UserId == 0 {
+			return nil, gerror.New("管理员操作需要指定用户ID")
+		}
+		targetUserId = req.UserId
+	} else {
+		targetUserId = currentUserId
+	}
+
+	err = c.users.UpdateProfile(ctx, targetUserId, req.Nickname, req.Email)
 	if err != nil {
 		return nil, err
 	}

@@ -11,7 +11,7 @@ type LoginReq struct {
 type LoginRes struct {
 	Token        string `json:"token" dc:"访问令牌"`
 	TotpRequired bool   `json:"totpRequired" dc:"是否需要TOTP验证"`
-	Uid          int    `json:"uid" dc:"用户ID"`
+	UserId       int    `json:"userId" dc:"用户ID"`
 }
 
 type LogoutReq struct {
@@ -35,7 +35,8 @@ type RegisterRes struct {
 
 type ChangePasswordReq struct {
 	g.Meta      `path:"users/changePassword" method:"post" sm:"修改密码" tags:"用户管理"`
-	OldPassword string `json:"oldPassword" v:"required|length:6,16" dc:"旧密码"`
+	UserId      int    `json:"userId" dc:"用户ID(管理员可传,否则修改自己)"`
+	OldPassword string `json:"oldPassword" dc:"旧密码(管理员重置时不需要)"`
 	NewPassword string `json:"newPassword" v:"required|length:6,16" dc:"新密码"`
 }
 
@@ -44,6 +45,7 @@ type ChangePasswordRes struct {
 
 type UpdateProfileReq struct {
 	g.Meta   `path:"users/updateProfile" method:"post" sm:"修改信息" tags:"用户管理"`
+	UserId   int    `json:"userId" dc:"用户ID(管理员可传,否则修改自己)"`
 	Nickname string `json:"nickname" v:"length:0,50" dc:"昵称"`
 	Email    string `json:"email" v:"email|length:0,100" dc:"邮箱"`
 }
@@ -83,4 +85,13 @@ type DeleteUserReq struct {
 }
 
 type DeleteUserRes struct {
+}
+
+type ResetPasswordReq struct {
+	g.Meta      `path:"users/resetPassword" method:"post" sm:"重置密码" tags:"用户管理"`
+	UserId      int    `json:"userId" v:"required" dc:"用户ID"`
+	NewPassword string `json:"newPassword" v:"required|length:6,16" dc:"新密码"`
+}
+
+type ResetPasswordRes struct {
 }

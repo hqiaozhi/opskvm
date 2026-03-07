@@ -11,7 +11,7 @@ import (
 func (c *ControllerV1) DeleteUser(ctx context.Context, req *v1.DeleteUserReq) (res *v1.DeleteUserRes, err error) {
 	currentUserId := c.users.JWT.GetUserIdFromCtx(ctx)
 	if currentUserId == 0 {
-		return nil, gerror.New("unauthorized")
+		return nil, gerror.New("未登录或token无效")
 	}
 
 	isAdmin, err := c.users.IsAdmin(ctx, currentUserId)

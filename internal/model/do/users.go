@@ -18,6 +18,7 @@ type Users struct {
 	Nickname         any         //
 	Email            any         //
 	IsAdmin          any         //
+	TotpSecret       any         //
 	TwoFactorEnabled any         //
 	CreatedAt        *gtime.Time //
 	UpdatedAt        *gtime.Time //

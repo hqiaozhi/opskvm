@@ -6,13 +6,12 @@ import (
 	v1 "opskvm/api/users/v1"
 
 	"github.com/gogf/gf/v2/errors/gerror"
+	"github.com/gogf/gf/v2/net/ghttp"
 )
 
 func (c *ControllerV1) GetUserList(ctx context.Context, req *v1.GetUserListReq) (res *v1.GetUserListRes, err error) {
-	currentUserId := c.users.JWT.GetUserIdFromCtx(ctx)
-	if currentUserId == 0 {
-		return nil, gerror.New("unauthorized")
-	}
+	r := ghttp.RequestFromCtx(ctx)
+	currentUserId := r.GetParam("userid").Int()
 
 	isAdmin, err := c.users.IsAdmin(ctx, currentUserId)
 	if err != nil {

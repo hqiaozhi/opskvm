@@ -2,36 +2,50 @@ package users
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	v1 "opskvm/api/users/v1"
-	"opskvm/internal/logic/users"
 
+	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/net/ghttp"
 )
 
 func (c *ControllerV1) ChangePassword(ctx context.Context, req *v1.ChangePasswordReq) (res *v1.ChangePasswordRes, err error) {
 	r := ghttp.RequestFromCtx(ctx)
-	userIdStr := r.GetParam("userid")
-	userId, err := strconv.Atoi(userIdStr.String())
+	currentUserId := c.users.JWT.GetUserIdFromCtx(ctx)
+	if currentUserId == 0 {
+		return nil, gerror.New("未登录或token无效")
+	}
+
+	isAdmin, err := c.users.IsAdmin(ctx, currentUserId)
 	if err != nil {
 		return nil, err
 	}
 
-	err = c.users.ChangePassword(ctx, userId, req.OldPassword, req.NewPassword)
+	var targetUserId int
+	if isAdmin {
+		if req.UserId == 0 {
+			return nil, gerror.New("管理员操作需要指定用户ID")
+		}
+		targetUserId = req.UserId
+	} else {
+		targetUserId = currentUserId
+	}
+
+	err = c.users.ChangePassword(ctx, targetUserId, req.OldPassword, req.NewPassword)
 	if err != nil {
 		return nil, err
 	}
 
-	r2 := ghttp.RequestFromCtx(ctx)
-	token := r2.GetCtxVar("token").String()
-	if token != "" {
-		expireTime, err := users.JwtInstance.GetTokenExpireTime(token)
-		if err == nil {
-			expireDuration := time.Until(expireTime)
-			if expireDuration > 0 {
-				users.JwtInstance.AddToBlacklist(token, expireDuration)
+	if targetUserId == currentUserId {
+		token := r.GetCtxVar("token").String()
+		if token != "" {
+			expireTime, err := c.users.JWT.GetTokenExpireTime(token)
+			if err == nil {
+				expireDuration := time.Until(expireTime)
+				if expireDuration > 0 {
+					c.users.JWT.AddToBlacklist(token, expireDuration)
+				}
 			}
 		}
 	}

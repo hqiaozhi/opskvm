@@ -3,6 +3,7 @@ package totp
 import (
 	"context"
 	"opskvm/internal/dao"
+	"opskvm/internal/model/do"
 	"opskvm/internal/model/entity"
 
 	"github.com/gogf/gf/v2/errors/gerror"
@@ -27,16 +28,18 @@ func (t *Totp) Disable(ctx context.Context, userId int, code, password string) (
 		return false, gerror.New("password is incorrect")
 	}
 
-	valid := totp.Validate(code, user.TwoFactorSecret)
+	valid := totp.Validate(code, user.TotpSecret)
 	if !valid {
 		return false, gerror.New("invalid TOTP code")
 	}
 
-	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(map[string]interface{}{
-		"two_factor_secret":   "",
-		"two_factor_enabled": 0,
-		"updated_at":         gtime.Now(),
-	}).Update()
+	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(
+		do.Users{
+			TotpSecret:       "",
+			TwoFactorEnabled: 0,
+			UpdatedAt:        gtime.Now(),
+		},
+	).Update()
 	if err != nil {
 		return false, gerror.New("failed to disable TOTP")
 	}

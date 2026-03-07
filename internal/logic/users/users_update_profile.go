@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"opskvm/internal/dao"
+	"opskvm/internal/model/do"
 	"opskvm/internal/model/entity"
 
 	"github.com/gogf/gf/v2/errors/gerror"
@@ -21,17 +22,16 @@ func (u *Users) UpdateProfile(ctx context.Context, userId int, nickname, email s
 	}
 
 	if email != "" && email != user.Email {
-		var existEmail entity.Users
-		err := dao.Users.Ctx(ctx).Where("email", email).Scan(&existEmail)
+		count, err := dao.Users.Ctx(ctx).Where("email", email).Count()
 		if err != nil {
 			return gerror.New("database query error")
 		}
-		if existEmail.Email == email && existEmail.Id != userId {
+		if count > 0 {
 			return gerror.New("email already exists")
 		}
 	}
 
-	updateData := entity.Users{
+	updateData := do.Users{
 		UpdatedAt: gtime.Now(),
 	}
 	if nickname != "" {

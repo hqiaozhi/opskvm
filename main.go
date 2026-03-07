@@ -4,6 +4,7 @@ import (
 	_ "opskvm/internal/packed"
 
 	"opskvm/internal/cmd"
+	"os"
 
 	_ "github.com/gogf/gf/contrib/drivers/sqlite/v2"
 	"github.com/gogf/gf/v2/frame/g"
@@ -17,6 +18,7 @@ const (
 )
 
 func main() {
+	os.Setenv("TZ", "Asia/Shanghai")
 	g.I18n().SetLanguage("zh-CN")
 	err := gtime.SetTimeZone("Asia/Shanghai")
 	if err != nil {
