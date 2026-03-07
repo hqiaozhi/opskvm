@@ -1,7 +1,7 @@
 package service
 
 import (
-	"log"
+	"context"
 	"opskvm/internal/service/files"
 	"opskvm/internal/service/hid"
 	"opskvm/internal/service/hid/ch9329"
@@ -118,15 +118,15 @@ func (s *SVC) initOTG() {
 		}
 
 		s.HID = otg.NewOTGKMHIDController()
-		s.HID.SetAbsoluteMouse(true) // 与CH9329保持一致，默认使用绝对鼠标模式
+		s.HID.SetAbsoluteMouse(true)
 		if err := s.HID.Open(); err != nil {
-			log.Printf("Failed to open OTG HID: %v", err)
+			g.Log().Errorf(context.Background(), "Failed to open OTG HID: %v", err)
 		}
 	case "ch9329":
 		s.HID = ch9329.NewCH9329(Ch9329Path)
 		s.HID.SetAbsoluteMouse(true)
 		if err := s.HID.Open(); err != nil {
-			log.Printf("Failed to open CH9329: %v", err)
+			g.Log().Errorf(context.Background(), "Failed to open CH9329: %v", err)
 		}
 	}
 }
@@ -142,9 +142,8 @@ func (s *SVC) initVideo() {
 	if err := camera.Open(VideoPath); err != nil {
 		panic(err)
 	}
-	// 应用配置到摄像头
 	if err := camera.ApplyConfig(VideoWidth, VideoHeight, VideoFPS); err != nil {
-		log.Printf("Warning: Failed to apply camera config: %v, using device default", err)
+		g.Log().Warningf(context.Background(), "Failed to apply camera config: %v, using device default", err)
 	}
 	s.Camera = camera
 
@@ -166,8 +165,7 @@ func (s *SVC) initVideo() {
 
 			frame, err := s.Camera.Capture()
 			if err != nil {
-				log.Println("Capture error:", err)
-				// 短暂重试，避免设备重启导致的瞬时错误
+				g.Log().Errorf(context.Background(), "Capture error: %v", err)
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
@@ -186,21 +184,16 @@ func (s *SVC) handleInterrupt(camera video.Camera, streamer video.Streamer, gadg
 	signal.Notify(ch, os.Interrupt)
 	<-ch
 
-	log.Println("Stopping server...")
-	// 移除旧的Gadget目录
+	g.Log().Info(context.Background(), "Stopping server...")
 	if gadget != nil {
 		if err := gadget.Remove(); err != nil {
-			log.Printf("Error removing Gadget: %v", err)
+			g.Log().Errorf(context.Background(), "Error removing Gadget: %v", err)
 		}
 	}
-	// 停止流分发器
 	streamer.Stop()
-	// 关闭摄像头
 	camera.Close()
-	// 等待流分发器停止
 	streamer.Wait()
 
-	// 所有清理操作完成后，关闭通道通知主程序
-	log.Println("All cleanup operations completed, exiting...")
+	g.Log().Info(context.Background(), "All cleanup operations completed, exiting...")
 	close(done)
 }

@@ -143,14 +143,14 @@ func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.S
 		// 发送帧数据
 		if buf == nil {
 			if err := conn.WriteMessage(websocket.BinaryMessage, c.kvm.SVC.Streamer.(*video.MJPEGStreamer).Blank); err != nil {
-				g.Log().Printf(ctx, "[%s] Write blank frame error: %v", gReq.GetClientIp(), err)
+				g.Log().Errorf(ctx, "[%s] Write blank frame error: %v", gReq.GetClientIp(), err)
 			}
-			g.Log().Printf(ctx, "[%s] Quitting", gReq.GetClientIp())
+			g.Log().Infof(ctx, "[%s] Quitting", gReq.GetClientIp())
 			return
 		}
 
 		if err = conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
-			g.Log().Printf(ctx, "[%s] Write frame data error: %v", gReq.GetClientIp(), err)
+			g.Log().Errorf(ctx, "[%s] Write frame data error: %v", gReq.GetClientIp(), err)
 			return
 		}
 	}
@@ -158,13 +158,12 @@ func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.S
 
 // handleWSMessage 处理WebSocket消息
 func (c *ControllerV1) handleWSMessage(ctx context.Context, clt *video.Client, message []byte) {
-	// 记录原始消息，便于调试
-	g.Log().Printf(ctx, "Received WebSocket raw message: %s", string(message))
+	g.Log().Debug(ctx, "Received WebSocket raw message: ", string(message))
 
 	// 解析JSON消息
 	var wsMsg WSMessage
 	if err := json.Unmarshal(message, &wsMsg); err != nil {
-		g.Log().Printf(ctx, "Parse WebSocket message error: %v", err)
+		g.Log().Errorf(ctx, "Parse WebSocket message error: %v", err)
 		return
 	}
 
@@ -186,16 +185,16 @@ func (c *ControllerV1) handleWSMessage(ctx context.Context, clt *video.Client, m
 		case "video_control":
 			msgType = WSMessageTypeVideoControl
 		default:
-			g.Log().Printf(ctx, "Unknown WebSocket message type string: %s", v)
+			g.Log().Debugf(ctx, "Unknown WebSocket message type string: %s", v)
 			return
 		}
 	default:
-		g.Log().Printf(ctx, "Unknown WebSocket message type: %T", wsMsg.Type)
+		g.Log().Debugf(ctx, "Unknown WebSocket message type: %T", wsMsg.Type)
 		return
 	}
 
 	// 记录消息类型
-	g.Log().Printf(ctx, "Received WebSocket message, type: %d", msgType)
+	g.Log().Debugf(ctx, "Received WebSocket message, type: %d", msgType)
 
 	// 根据消息类型处理
 	switch msgType {
@@ -207,29 +206,29 @@ func (c *ControllerV1) handleWSMessage(ctx context.Context, clt *video.Client, m
 			// 转换为JSON字节
 			dataBytes, err := json.Marshal(dataMap)
 			if err != nil {
-				g.Log().Printf(ctx, "Failed to marshal keyboard data: %v", err)
+				g.Log().Errorf(ctx, "Failed to marshal keyboard data: %v", err)
 				return
 			}
 			// 解析为结构体
 			if err := json.Unmarshal(dataBytes, &keyboardData); err != nil {
-				g.Log().Printf(ctx, "Failed to unmarshal keyboard data: %v", err)
+				g.Log().Errorf(ctx, "Failed to unmarshal keyboard data: %v", err)
 				return
 			}
 		} else {
 			// 直接解析
 			dataBytes, err := json.Marshal(wsMsg.Data)
 			if err != nil {
-				g.Log().Printf(ctx, "Failed to marshal keyboard data: %v", err)
+				g.Log().Errorf(ctx, "Failed to marshal keyboard data: %v", err)
 				return
 			}
 			if err := json.Unmarshal(dataBytes, &keyboardData); err != nil {
-				g.Log().Printf(ctx, "Failed to unmarshal keyboard data: %v", err)
+				g.Log().Errorf(ctx, "Failed to unmarshal keyboard data: %v", err)
 				return
 			}
 		}
 
 		// 记录键盘事件
-		g.Log().Printf(ctx, "Keyboard event: modifier=0x%02x, keys=%v", keyboardData.Modifier, keyboardData.Keys)
+		g.Log().Debugf(ctx, "Keyboard event: modifier=0x%02x, keys=%v", keyboardData.Modifier, keyboardData.Keys)
 
 		// 直接使用接收到的按键码发送报告
 		c.kvm.SVC.HID.SendKeyboardReport(keyboardData.Modifier, keyboardData.Keys)
@@ -242,33 +241,33 @@ func (c *ControllerV1) handleWSMessage(ctx context.Context, clt *video.Client, m
 			// 转换为JSON字节
 			dataBytes, err := json.Marshal(dataMap)
 			if err != nil {
-				g.Log().Printf(ctx, "Failed to marshal mouse data: %v", err)
+				g.Log().Errorf(ctx, "Failed to marshal mouse data: %v", err)
 				return
 			}
 			// 解析为结构体
 			if err := json.Unmarshal(dataBytes, &mouseData); err != nil {
-				g.Log().Printf(ctx, "Failed to unmarshal mouse data: %v", err)
+				g.Log().Errorf(ctx, "Failed to unmarshal mouse data: %v", err)
 				return
 			}
 		} else {
 			// 直接解析
 			dataBytes, err := json.Marshal(wsMsg.Data)
 			if err != nil {
-				g.Log().Printf(ctx, "Failed to marshal mouse data: %v", err)
+				g.Log().Errorf(ctx, "Failed to marshal mouse data: %v", err)
 				return
 			}
 			if err := json.Unmarshal(dataBytes, &mouseData); err != nil {
-				g.Log().Printf(ctx, "Failed to unmarshal mouse data: %v", err)
+				g.Log().Errorf(ctx, "Failed to unmarshal mouse data: %v", err)
 				return
 			}
 		}
 
 		// 记录当前鼠标模式
 		absolute := c.kvm.SVC.HID.IsAbsoluteMouse()
-		g.Log().Printf(ctx, "WS Mouse Data - Type: %d, Mode: %v, Data: %+v", wsMsg.Type, absolute, mouseData)
+		g.Log().Debugf(ctx, "WS Mouse Data - Type: %d, Mode: %v, Data: %+v", wsMsg.Type, absolute, mouseData)
 
 		// 记录所有鼠标事件，包括纯移动事件
-		g.Log().Printf(ctx, "Mouse event: buttons=0x%02x, dx=%d, dy=%d, wheel=%d", mouseData.Buttons, mouseData.DX, mouseData.DY, mouseData.Wheel)
+		g.Log().Debugf(ctx, "Mouse event: buttons=0x%02x, dx=%d, dy=%d, wheel=%d", mouseData.Buttons, mouseData.DX, mouseData.DY, mouseData.Wheel)
 		c.kvm.SVC.HID.SendMouseReport(mouseData.Buttons, int(mouseData.DX), int(mouseData.DY), mouseData.Wheel)
 
 	case WSMessageTypeMouseMode:
@@ -279,69 +278,69 @@ func (c *ControllerV1) handleWSMessage(ctx context.Context, clt *video.Client, m
 			// 转换为JSON字节
 			dataBytes, err := json.Marshal(dataMap)
 			if err != nil {
-				g.Log().Printf(ctx, "Failed to marshal mouse mode data: %v", err)
+				g.Log().Errorf(ctx, "Failed to marshal mouse mode data: %v", err)
 				return
 			}
 			// 解析为结构体
 			if err := json.Unmarshal(dataBytes, &mouseModeData); err != nil {
-				g.Log().Printf(ctx, "Failed to unmarshal mouse mode data: %v", err)
+				g.Log().Errorf(ctx, "Failed to unmarshal mouse mode data: %v", err)
 				return
 			}
 		} else {
 			// 直接解析
 			dataBytes, err := json.Marshal(wsMsg.Data)
 			if err != nil {
-				g.Log().Printf(ctx, "Failed to marshal mouse mode data: %v", err)
+				g.Log().Errorf(ctx, "Failed to marshal mouse mode data: %v", err)
 				return
 			}
 			if err := json.Unmarshal(dataBytes, &mouseModeData); err != nil {
-				g.Log().Printf(ctx, "Failed to unmarshal mouse mode data: %v", err)
+				g.Log().Errorf(ctx, "Failed to unmarshal mouse mode data: %v", err)
 				return
 			}
 		}
 
-		g.Log().Printf(ctx, "Mouse mode change: absolute=%v", mouseModeData.Absolute)
+		g.Log().Infof(ctx, "Mouse mode change: absolute=%v", mouseModeData.Absolute)
 		c.kvm.SVC.HID.SetAbsoluteMouse(mouseModeData.Absolute)
 	case WSMessageTypeVideo:
 		// 视频流数据，这里不需要处理，因为视频流是从服务器发送到客户端的
-		g.Log().Printf(ctx, "Received video stream data, ignoring")
+		g.Log().Debug(ctx, "Received video stream data, ignoring")
 	case WSMessageTypeVideoControl:
 		// 处理视频控制消息
 		var videoControlData VideoControlData
 		if dataMap, ok := wsMsg.Data.(map[string]interface{}); ok {
 			dataBytes, err := json.Marshal(dataMap)
 			if err != nil {
-				g.Log().Printf(ctx, "Failed to marshal video control data: %v", err)
+				g.Log().Errorf(ctx, "Failed to marshal video control data: %v", err)
 				return
 			}
 			if err := json.Unmarshal(dataBytes, &videoControlData); err != nil {
-				g.Log().Printf(ctx, "Failed to unmarshal video control data: %v", err)
+				g.Log().Errorf(ctx, "Failed to unmarshal video control data: %v", err)
 				return
 			}
 		} else {
 			dataBytes, err := json.Marshal(wsMsg.Data)
 			if err != nil {
-				g.Log().Printf(ctx, "Failed to marshal video control data: %v", err)
+				g.Log().Errorf(ctx, "Failed to marshal video control data: %v", err)
 				return
 			}
 			if err := json.Unmarshal(dataBytes, &videoControlData); err != nil {
-				g.Log().Printf(ctx, "Failed to unmarshal video control data: %v", err)
+				g.Log().Errorf(ctx, "Failed to unmarshal video control data: %v", err)
 				return
 			}
 		}
 
-		g.Log().Printf(ctx, "Video control action: %s", videoControlData.Action)
+		g.Log().Infof(ctx, "Video control action: %s", videoControlData.Action)
 		switch videoControlData.Action {
 		case "stop":
 			clt.SendVideo = false
-			g.Log().Printf(ctx, "Video streaming stopped for this client")
+			g.Log().Infof(ctx, "Video streaming stopped for this client")
 		case "start":
 			clt.SendVideo = true
-			g.Log().Printf(ctx, "Video streaming resumed for this client")
+			g.Log().Infof(ctx, "Video streaming resumed for this client")
 		default:
-			g.Log().Printf(ctx, "Unknown video control action: %s", videoControlData.Action)
+			g.Log().Debugf(ctx, "Unknown video control action: %s", videoControlData.Action)
 		}
 	default:
-		g.Log().Printf(ctx, "Unknown WebSocket message type: %d", wsMsg.Type)
+		g.Log().Debugf(ctx, "Unknown WebSocket message type: %d", wsMsg.Type)
 	}
 }

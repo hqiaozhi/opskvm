@@ -2,10 +2,12 @@ package video
 
 import (
 	"bytes"
+	"context"
 	"image"
 	"image/jpeg"
-	"log"
 	"sync"
+
+	"github.com/gogf/gf/v2/frame/g"
 )
 
 // Streamer 定义帧数据分发的接口
@@ -204,14 +206,14 @@ func (s *MJPEGStreamer) Pause() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.paused = true
-	log.Println("Stream paused for config update")
+	g.Log().Info(context.Background(), "Stream paused for config update")
 }
 
 func (s *MJPEGStreamer) Resume() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.paused = false
-	log.Println("Stream resumed after config update")
+	g.Log().Info(context.Background(), "Stream resumed after config update")
 }
 
 func (s *MJPEGStreamer) SetClientVideo(clientIndex int, sendVideo bool) {
@@ -220,7 +222,7 @@ func (s *MJPEGStreamer) SetClientVideo(clientIndex int, sendVideo bool) {
 
 	if clientIndex >= 0 && clientIndex < len(s.clients) {
 		s.clients[clientIndex].SendVideo = sendVideo
-		log.Printf("Client %d video sending set to: %v", clientIndex, sendVideo)
+		g.Log().Infof(context.Background(), "Client %d video sending set to: %v", clientIndex, sendVideo)
 	}
 }
 

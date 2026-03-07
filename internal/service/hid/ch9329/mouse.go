@@ -1,8 +1,10 @@
 package ch9329
 
 import (
-	"log"
+	"context"
 	"time"
+
+	"github.com/gogf/gf/v2/frame/g"
 )
 
 // CH9329 鼠标按键
@@ -36,7 +38,7 @@ func remap(value, fromMin, fromMax, toMin, toMax int) int {
 
 // SetAbsoluteMouse 设置鼠标是否使用绝对模式
 func (d *CH9329Device) SetAbsoluteMouse(absolute bool) error {
-	log.Printf("CH9329: Setting absolute mouse mode to: %v", absolute)
+	g.Log().Infof(context.Background(), "Setting absolute mouse mode to: %v", absolute)
 	d.absolute = absolute
 	return nil
 }
@@ -48,9 +50,8 @@ func (d *CH9329Device) IsAbsoluteMouse() bool {
 
 // SendMouseReport 发送鼠标HID报告，与Python版本完全一致
 func (d *CH9329Device) SendMouseReport(buttons byte, dx, dy int, wheel int8) error {
-	// 绝对模式下，所有移动事件都记录日志；相对模式下，只有按键或滚轮操作才记录日志
 	if d.absolute || buttons > 0 || wheel != 0 || dx != 0 || dy != 0 {
-		log.Printf("CH9329: SendMouseReport called - absolute: %v, buttons: 0x%02x, dx: %d, dy: %d, wheel: %d", d.absolute, buttons, dx, dy, wheel)
+		g.Log().Debugf(context.Background(), "SendMouseReport called - absolute: %v, buttons: 0x%02x, dx: %d, dy: %d, wheel: %d", d.absolute, buttons, dx, dy, wheel)
 	}
 	var cmd []byte
 
@@ -82,8 +83,7 @@ func (d *CH9329Device) SendMouseReport(buttons byte, dx, dy int, wheel int8) err
 		// 65535 / 8 = 8191.875，向上取整为8192，与CH9329的要求一致
 		fixedX := (absDx + 7) / 8
 		fixedY := (absDy + 7) / 8
-		// 添加调试日志，显示转换后的坐标值
-		log.Printf("CH9329: Absolute mouse coords - raw: (%d,%d), fixed: (%d,%d)", absDx, absDy, fixedX, fixedY)
+		g.Log().Debugf(context.Background(), "Absolute mouse coords - raw: (%d,%d), fixed: (%d,%d)", absDx, absDy, fixedX, fixedY)
 
 		// 绝对鼠标命令格式，与Python完全一致：
 		// [0, 0x04, 0x07, 0x02, buttons, x_low, x_high, y_low, y_high, wheel]

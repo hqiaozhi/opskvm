@@ -73,7 +73,7 @@ func (s *Sqlite) IintTable() {
 	}
 	_, err = db1.Exec(ctx, getCreateDefaultUserSql(user_name.String(), hashedPassword, true))
 	if err != nil {
-		g.Log().Error(ctx, err)
+		g.Log().Warning(ctx, err)
 	}
 
 	// 创建WOl表

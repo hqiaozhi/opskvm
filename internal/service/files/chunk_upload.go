@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/util/grand"
 )
 
@@ -71,7 +72,7 @@ func GetChunkUploadService(rootPath string) *ChunkUploadService {
 			UploadFinalDir: filepath.Join(rootPath, "uploads"),
 		}
 		if err := os.MkdirAll(chunkUploadService.UploadFinalDir, 0755); err != nil {
-			fmt.Printf("创建目录失败: %s, err: %v\n", chunkUploadService.UploadFinalDir, err)
+			g.Log().Errorf(context.Background(), "创建目录失败: %s, err: %v", chunkUploadService.UploadFinalDir, err)
 		}
 	})
 	return chunkUploadService
@@ -140,7 +141,7 @@ func (s *ChunkUploadService) InitUpload(fileMetas []FileMeta, chunkSize int64) (
 		finalPath := filepath.Join(s.UploadFinalDir, meta.Path)
 		dirPath := filepath.Dir(finalPath)
 		if err := os.MkdirAll(dirPath, 0755); err != nil {
-			fmt.Printf("创建父目录失败: %s, err: %v\n", dirPath, err)
+			g.Log().Errorf(context.Background(), "创建父目录失败: %s, err: %v", dirPath, err)
 		}
 
 		skipUpload := false
@@ -152,12 +153,12 @@ func (s *ChunkUploadService) InitUpload(fileMetas []FileMeta, chunkSize int64) (
 						existingSha256, err := s.calculateFileSha256(finalPath)
 						if err == nil && existingSha256 == meta.Md5 {
 							skipUpload = true
-							fmt.Printf("[InitUpload] 秒传: uploadId=%s, path=%s, size=%d, sha256=%s\n",
+							g.Log().Infof(context.Background(), "[InitUpload] 秒传: uploadId=%s, path=%s, size=%d, sha256=%s",
 								uploadID, meta.Path, meta.Size, meta.Md5)
 						}
 					} else {
 						os.Remove(finalPath)
-						fmt.Printf("[InitUpload] 文件大小不匹配，删除旧文件: uploadId=%s, path=%s, oldSize=%d, newSize=%d\n",
+						g.Log().Infof(context.Background(), "[InitUpload] 文件大小不匹配，删除旧文件: uploadId=%s, path=%s, oldSize=%d, newSize=%d",
 							uploadID, meta.Path, existsInfo.Size(), meta.Size)
 					}
 				}
@@ -166,7 +167,7 @@ func (s *ChunkUploadService) InitUpload(fileMetas []FileMeta, chunkSize int64) (
 			if !skipUpload {
 				f, err := os.OpenFile(finalPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 				if err != nil {
-					fmt.Printf("创建最终文件失败: %s, err: %v\n", finalPath, err)
+					g.Log().Errorf(context.Background(), "创建最终文件失败: %s, err: %v", finalPath, err)
 					continue
 				}
 				finalFile = f
@@ -193,7 +194,7 @@ func (s *ChunkUploadService) InitUpload(fileMetas []FileMeta, chunkSize int64) (
 		sessions = append(sessions, session)
 
 		if !skipUpload {
-			fmt.Printf("[InitUpload] uploadId=%s, path=%s, size=%d, chunkCount=%d, isDir=%v\n",
+			g.Log().Infof(context.Background(), "[InitUpload] uploadId=%s, path=%s, size=%d, chunkCount=%d, isDir=%v",
 				uploadID, meta.Path, meta.Size, chunkCount, isDir)
 		}
 	}
@@ -244,11 +245,9 @@ func (s *ChunkUploadService) UploadChunk(ctx context.Context, uploadID string, c
 
 	writtenSize := int64(len(chunkData))
 
-	s.mu.Lock()
-	session.UploadedMap[chunkIndex] = writtenSize
-	s.mu.Unlock()
+	s.RecordChunk(uploadID, chunkIndex, writtenSize)
 
-	fmt.Printf("[UploadChunk] uploadId=%s, chunkIndex=%d, size=%d, offset=%d\n", uploadID, chunkIndex, writtenSize, offset)
+	g.Log().Debugf(context.Background(), "[UploadChunk] uploadId=%s, chunkIndex=%d, size=%d, offset=%d", uploadID, chunkIndex, writtenSize, offset)
 
 	return writtenSize, nil
 }
@@ -281,7 +280,7 @@ func (s *ChunkUploadService) CompleteUpload(ctx context.Context, uploadID string
 		s.mu.Lock()
 		delete(s.sessions, uploadID)
 		s.mu.Unlock()
-		fmt.Printf("[CompleteUpload] 秒传完成, uploadId=%s, finalPath=%s\n", uploadID, session.FinalPath)
+		g.Log().Infof(context.Background(), "[CompleteUpload] 秒传完成, uploadId=%s, finalPath=%s", uploadID, session.FinalPath)
 		return session.FinalPath, nil
 	}
 
@@ -316,7 +315,7 @@ func (s *ChunkUploadService) CompleteUpload(ctx context.Context, uploadID string
 		s.mu.Lock()
 		delete(s.sessions, uploadID)
 		s.mu.Unlock()
-		fmt.Printf("[CompleteUpload] SHA256不一致，上传失败！uploadId=%s, expectedSha256=%s, calculatedSha256=%s\n",
+		g.Log().Errorf(context.Background(), "[CompleteUpload] SHA256不一致，上传失败！uploadId=%s, expectedSha256=%s, calculatedSha256=%s",
 			uploadID, session.FileMd5, calculatedSha256)
 		return "", fmt.Errorf("SHA256不一致，上传失败！")
 	}
@@ -327,7 +326,7 @@ func (s *ChunkUploadService) CompleteUpload(ctx context.Context, uploadID string
 	delete(s.sessions, uploadID)
 	s.mu.Unlock()
 
-	fmt.Printf("[CompleteUpload] 完成, uploadId=%s, finalPath=%s, sha256=%s\n", uploadID, filePath, calculatedSha256)
+	g.Log().Infof(context.Background(), "[CompleteUpload] 完成, uploadId=%s, finalPath=%s, sha256=%s", uploadID, filePath, calculatedSha256)
 
 	return filePath, nil
 }
@@ -350,7 +349,7 @@ func (s *ChunkUploadService) CompleteAllUploads(ctx context.Context) (int, []Upl
 	for _, session := range pendingSessions {
 		_, err := s.CompleteUpload(ctx, session.UploadID)
 		if err != nil {
-			fmt.Printf("[CompleteAllUploads] failed: uploadId=%s, err=%v\n", session.UploadID, err)
+			g.Log().Errorf(context.Background(), "[CompleteAllUploads] failed: uploadId=%s, err=%v", session.UploadID, err)
 			continue
 		}
 		completedSessions = append(completedSessions, session)
@@ -369,7 +368,7 @@ func (s *ChunkUploadService) CancelUpload(ctx context.Context, uploadID string) 
 		return fmt.Errorf("上传会话不存在: %s", uploadID)
 	}
 
-	fmt.Printf("[CancelUpload] 开始取消上传: uploadId=%s, finalPath=%s, skipUpload=%v, file=nil(%v)\n",
+	g.Log().Infof(context.Background(), "[CancelUpload] 开始取消上传: uploadId=%s, finalPath=%s, skipUpload=%v, file=nil(%v)",
 		uploadID, session.FinalPath, session.SkipUpload, session.File == nil)
 
 	if session.File != nil {
@@ -382,13 +381,13 @@ func (s *ChunkUploadService) CancelUpload(ctx context.Context, uploadID string) 
 
 	if session.FinalPath != "" {
 		if err := os.Remove(session.FinalPath); err == nil {
-			fmt.Printf("[CancelUpload] 已删除文件: uploadId=%s, path=%s\n", uploadID, session.FinalPath)
+			g.Log().Infof(context.Background(), "[CancelUpload] 已删除文件: uploadId=%s, path=%s", uploadID, session.FinalPath)
 		} else {
-			fmt.Printf("[CancelUpload] 删除文件失败: uploadId=%s, path=%s, err=%v\n", uploadID, session.FinalPath, err)
+			g.Log().Errorf(context.Background(), "[CancelUpload] 删除文件失败: uploadId=%s, path=%s, err=%v", uploadID, session.FinalPath, err)
 		}
 	}
 
-	fmt.Printf("[CancelUpload] 完成: uploadId=%s\n", uploadID)
+	g.Log().Infof(context.Background(), "[CancelUpload] 完成: uploadId=%s", uploadID)
 
 	return nil
 }

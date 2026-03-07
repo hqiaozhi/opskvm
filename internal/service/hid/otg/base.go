@@ -1,12 +1,14 @@
 package otg
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	gLog "github.com/gogf/gf/v2/frame/g"
 )
 
 type GadgetInterface interface {
@@ -89,13 +91,11 @@ func (g *Gadget) Unlink(path string) error {
 
 // InitConfig 初始化配置
 func (g *Gadget) InitConfig() (string, error) {
-	log.Printf("Gadget: Starting USB Gadget initialization")
+	gLog.Log().Info(context.Background(), "Gadget: Starting USB Gadget initialization")
 
-	// 尝试删除旧的Gadget目录
 	if err := g.Remove(); err != nil {
-		log.Printf("Gadget: Failed to remove old Gadget directory: %v", err)
+		gLog.Log().Errorf(context.Background(), "Gadget: Failed to remove old Gadget directory: %v", err)
 	}
-	// 给控制器足够的时间完成重置
 	time.Sleep(5 * time.Second)
 
 	// ===================================================
@@ -132,19 +132,19 @@ func (g *Gadget) InitConfig() (string, error) {
 	}
 
 	// 创建Gadget根目录
-	log.Printf("Gadget: Creating Gadget root directory: %s", g.gadgetPath)
+	gLog.Log().Infof(context.Background(), "Creating Gadget root directory: %s", g.gadgetPath)
 	err := g.Mkdir(g.gadgetPath)
 	if err != nil {
 		return "", logError("Failed to create Gadget root directory: %w", err)
 	}
-	log.Printf("Gadget: Successfully created Gadget root directory: %s", g.gadgetPath)
+	gLog.Log().Infof(context.Background(), "Successfully created Gadget root directory: %s", g.gadgetPath)
 
 	// 给系统时间更新目录结构
 	time.Sleep(100 * time.Millisecond)
 
 	// ===================================================
 	// 设置USB描述符
-	log.Printf("Gadget: Setting USB descriptors...")
+	gLog.Log().Info(context.Background(), "Setting USB descriptors...")
 	gadgetDescriptors := map[string]string{
 		"idVendor":  conf.IdVendor,
 		"idProduct": conf.IdProduct,
@@ -160,7 +160,7 @@ func (g *Gadget) InitConfig() (string, error) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	log.Printf("Gadget: Successfully set USB descriptors")
+	gLog.Log().Info(context.Background(), "Successfully set USB descriptors")
 
 	// ===================================================
 	// 创建字符串描述符目录
@@ -169,11 +169,11 @@ func (g *Gadget) InitConfig() (string, error) {
 	if err != nil {
 		return "", logError("Failed to create strings/0x409 directory: %w", err)
 	}
-	log.Printf("Gadget: Successfully created strings directory structure")
+	gLog.Log().Info(context.Background(), "Successfully created strings directory structure")
 	time.Sleep(100 * time.Millisecond)
 
 	// 写入字符串描述符
-	log.Printf("Gadget: Writing string descriptors...")
+	gLog.Log().Info(context.Background(), "Writing string descriptors...")
 	stringDescriptors := map[string]string{
 		"manufacturer": conf.Manufacturer,
 		"product":      conf.Product,
@@ -188,7 +188,7 @@ func (g *Gadget) InitConfig() (string, error) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	log.Printf("Gadget: Successfully wrote string descriptors")
+	gLog.Log().Info(context.Background(), "Successfully wrote string descriptors")
 
 	// 创建配置目录c.1
 	configPath := filepath.Join(g.gadgetPath, "configs", "c.1")
@@ -196,7 +196,7 @@ func (g *Gadget) InitConfig() (string, error) {
 	if err != nil {
 		return "", logError("Failed to create configuration directory: %w", err)
 	}
-	log.Printf("Gadget: Successfully created configuration directory: %s", configPath)
+	gLog.Log().Infof(context.Background(), "Successfully created configuration directory: %s", configPath)
 	time.Sleep(100 * time.Millisecond)
 
 	// 写入c.1配置
@@ -216,14 +216,14 @@ func (g *Gadget) InitConfig() (string, error) {
 
 	time.Sleep(2 * time.Second)
 
-	log.Printf("USB Gadget initialization completed successfully")
+	gLog.Log().Info(context.Background(), "USB Gadget initialization completed successfully")
 	return g.Name, nil
 }
 
 // logError 记录错误并返回
 func logError(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
-	log.Printf("Gadget:  %v", err)
+	gLog.Log().Errorf(context.Background(), "%v", err)
 	return err
 }
 
@@ -242,7 +242,7 @@ func (g *Gadget) CreateFunction(funcName string) (string, error) {
 	if err != nil {
 		return "", logError("Failed to create function directory: %w", err)
 	}
-	log.Printf("Gadget: Successfully created function directory: %s", funcPath)
+	gLog.Log().Infof(context.Background(), "Successfully created function directory: %s", funcPath)
 	return funcPath, nil
 }
 
@@ -269,12 +269,12 @@ func (g *Gadget) StartUDC() error {
 
 	for i := 0; i < maxRetries; i++ {
 		// 启动UDC设备
-		log.Printf("Gadget: Starting UDC device: %s (attempt %d/%d)", g.UDCControlName, i+1, maxRetries)
+		gLog.Log().Infof(context.Background(), "Starting UDC device: %s (attempt %d/%d)", g.UDCControlName, i+1, maxRetries)
 		err := g.Write(udcPath, g.UDCControlName)
 		if err != nil {
-			log.Printf("Gadget: Error: Failed to start UDC: %v", err)
+			gLog.Log().Errorf(context.Background(), "Failed to start UDC: %v", err)
 			if i < maxRetries-1 {
-				log.Printf("Gadget: Retrying in %v...", retryDelay)
+				gLog.Log().Infof(context.Background(), "Retrying in %v...", retryDelay)
 				time.Sleep(retryDelay)
 				continue
 			}
@@ -283,7 +283,7 @@ func (g *Gadget) StartUDC() error {
 
 		// 给控制器一些时间初始化
 		time.Sleep(500 * time.Millisecond)
-		log.Printf("Gadget: UDC device started successfully: %s", g.UDCControlName)
+		gLog.Log().Infof(context.Background(), "UDC device started successfully: %s", g.UDCControlName)
 		return nil
 	}
 
@@ -321,14 +321,11 @@ func (g *Gadget) CloseUDC() error {
 }
 
 func (g *Gadget) Remove() error {
-	log.Printf("\n")
-	log.Printf("Gadget: Removing old Gadget directory")
-	log.Printf("======================================\n")
+	gLog.Log().Info(context.Background(), "Removing old Gadget directory")
 
 	// 判断目录是否存在，不存在则跳过
 	if _, err := os.Stat(g.gadgetPath); os.IsNotExist(err) {
-		log.Printf("Gadget: Removing Gadget root directory successfully")
-		log.Printf("======================================\n\n")
+		gLog.Log().Info(context.Background(), "Removing Gadget root directory successfully")
 		return nil
 	}
 
@@ -337,7 +334,7 @@ func (g *Gadget) Remove() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Gadget: UDC device closed successfully")
+	gLog.Log().Info(context.Background(), "UDC device closed successfully")
 
 	// 删除功能符号链接
 	profilePath := filepath.Join(g.gadgetPath, "configs/c.1")
@@ -349,15 +346,15 @@ func (g *Gadget) Remove() error {
 			}
 		}
 	}
-	log.Printf("Gadget: Removing function symlinks successfully")
+	gLog.Log().Info(context.Background(), "Removing function symlinks successfully")
 
 	// 删除配置字符串目录
 	g.Rmdir(filepath.Join(profilePath, "strings/0x409"))
-	log.Printf("Gadget: Remove 'strings/0x409' directory successfully")
+	gLog.Log().Info(context.Background(), "Remove 'strings/0x409' directory successfully")
 
 	// 删除配置目录
 	g.Rmdir(profilePath)
-	log.Printf("Gadget: Removing '%s' directory successfully", "configs/c.1")
+	gLog.Log().Infof(context.Background(), "Removing '%s' directory successfully", "configs/c.1")
 
 	// 删除功能目录
 	funcsPath := filepath.Join(g.gadgetPath, "functions")
@@ -366,19 +363,18 @@ func (g *Gadget) Remove() error {
 		for _, entry := range entries {
 			if strings.HasPrefix(entry.Name(), "hid.usb") {
 				g.Rmdir(filepath.Join(funcsPath, entry.Name()))
-				log.Printf("Gadget: Remove '%s' directory successfully", entry.Name())
+				gLog.Log().Infof(context.Background(), "Remove '%s' directory successfully", entry.Name())
 			}
 		}
 	}
 
 	// 删除设备字符串目录
 	g.Rmdir(filepath.Join(g.gadgetPath, "strings/0x409"))
-	log.Printf("Gadget: Remove 'strings/0x409' directory successfully")
+	gLog.Log().Info(context.Background(), "Remove 'strings/0x409' directory successfully")
 
 	// 删除Gadget目录
 	g.Rmdir(g.gadgetPath)
-	log.Printf("Gadget: Removing Gadget root %s directory successfully", g.gadgetPath)
-	log.Printf("======================================\n\n")
+	gLog.Log().Infof(context.Background(), "Removing Gadget root %s directory successfully", g.gadgetPath)
 
 	return nil
 }

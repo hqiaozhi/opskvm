@@ -1,11 +1,12 @@
 package video
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 
+	"github.com/gogf/gf/v2/frame/g"
 	"github.com/korandiz/v4l"
 	"github.com/korandiz/v4l/fmt/mjpeg"
 )
@@ -43,7 +44,7 @@ func NewV4LCamera() *V4LCamera {
 func (c *V4LCamera) FindDevicePath() string {
 	devs := v4l.FindDevices()
 	if len(devs) == 0 {
-		log.Fatalf("No video devices found")
+		g.Log().Error(context.Background(), "No video devices found")
 		os.Exit(1)
 	}
 	return devs[0].Path
@@ -65,7 +66,7 @@ func (c *V4LCamera) Open(path string) error {
 		return err
 	}
 	c.cfg = cfg
-	log.Printf("camera: Opened camera device: %s", path)
+	g.Log().Infof(context.Background(), "camera: Opened camera device: %s", path)
 	return nil
 }
 
@@ -179,13 +180,11 @@ func (c *V4LCamera) UpdateConfig(width, height int, fps uint32) (v4l.DeviceConfi
 		}
 	}
 
-	// 4. 关闭当前设备（核心步骤）
-	log.Println("Closing camera device for config update...")
+	g.Log().Info(context.Background(), "Closing camera device for config update...")
 	oldDev.Close()
-	c.dev = nil // 标记设备已关闭
+	c.dev = nil
 
-	// 5. 重新打开设备（核心步骤）
-	log.Println("Reopening camera device with new config...")
+	g.Log().Info(context.Background(), "Reopening camera device with new config...")
 	newDev, err := v4l.Open(c.path)
 	if err != nil {
 		// 尝试恢复原有设备（打开失败时）
@@ -238,7 +237,7 @@ func (c *V4LCamera) UpdateConfig(width, height int, fps uint32) (v4l.DeviceConfi
 	}
 	c.cfg = actualCfg
 
-	log.Printf("Camera config updated successfully: %dx%d @ %.2f FPS",
+	g.Log().Infof(context.Background(), "Camera config updated successfully: %dx%d @ %.2f FPS",
 		actualCfg.Width, actualCfg.Height,
 		float64(actualCfg.FPS.N)/float64(actualCfg.FPS.D))
 
@@ -308,7 +307,7 @@ func (c *V4LCamera) ResetControls() error {
 	}
 	for _, ctrl := range ctrls {
 		if err := c.dev.SetControl(ctrl.CID, ctrl.Default); err != nil {
-			log.Printf("Warning: failed to reset control %d: %v", ctrl.CID, err)
+			g.Log().Warningf(context.Background(), "failed to reset control %d: %v", ctrl.CID, err)
 		}
 	}
 	return nil

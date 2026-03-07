@@ -1,12 +1,14 @@
 package files
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/os/gfile"
 	"golang.org/x/sys/unix"
 )
@@ -68,7 +70,7 @@ func GetFileManagerService(rootPath string) *FileManagerService {
 func (s *FileManagerService) initDir() {
 	if !gfile.Exists(s.storageDir) {
 		if err := os.MkdirAll(s.storageDir, 0755); err != nil {
-			fmt.Printf("创建文件存储目录失败: %s, err: %v\n", s.storageDir, err)
+			g.Log().Errorf(context.Background(), "创建文件存储目录失败: %s, err: %v", s.storageDir, err)
 		}
 	}
 }
@@ -309,14 +311,14 @@ func (s *FileManagerService) DeleteFiles(paths string) (int, []string, error) {
 
 		err := os.RemoveAll(filePath)
 		if err != nil {
-			fmt.Printf("[DeleteFiles] 删除失败: %s, err: %v\n", validatedPath, err)
+			g.Log().Errorf(context.Background(), "[DeleteFiles] 删除失败: %s, err: %v", validatedPath, err)
 			failedPaths = append(failedPaths, validatedPath)
 			continue
 		}
 
 		deletedPaths[validatedPath] = true
 		deletedCount++
-		fmt.Printf("[DeleteFiles] path=%s\n", validatedPath)
+		g.Log().Debugf(context.Background(), "[DeleteFiles] path=%s", validatedPath)
 	}
 
 	return deletedCount, failedPaths, nil
@@ -370,6 +372,6 @@ func (s *FileManagerService) CreateDirectory(targetPath string) error {
 		return fmt.Errorf("创建目录失败: %v", err)
 	}
 
-	fmt.Printf("[CreateDirectory] path=%s\n", targetPath)
+	g.Log().Infof(context.Background(), "[CreateDirectory] path=%s", targetPath)
 	return nil
 }

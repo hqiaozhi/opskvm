@@ -1,6 +1,7 @@
 package mirrors
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/os/gfile"
 )
 
@@ -74,7 +76,7 @@ func GetMirrorsManagerService(rootPath string) *MirrorsManagerService {
 func (s *MirrorsManagerService) initDir() {
 	if !gfile.Exists(s.StorageDir) {
 		if err := os.MkdirAll(s.StorageDir, 0755); err != nil {
-			fmt.Printf("创建存储目录失败: %s, err: %v\n", s.StorageDir, err)
+			g.Log().Errorf(context.Background(), "创建存储目录失败: %s, err: %v", s.StorageDir, err)
 		}
 	}
 }
@@ -329,7 +331,7 @@ func (s *MirrorsManagerService) downloadFromUrl(task *UrlUploadTask) {
 		if r := recover(); r != nil {
 			task.Status = StatusFailed
 			task.Error = fmt.Sprintf("下载失败: %v", r)
-			fmt.Printf("[UploadByUrl] failed: uploadId=%s, error=%v\n", task.UploadId, r)
+			g.Log().Errorf(context.Background(), "[UploadByUrl] failed: uploadId=%s, error=%v", task.UploadId, r)
 		}
 	}()
 
@@ -394,7 +396,7 @@ func (s *MirrorsManagerService) downloadFromUrl(task *UrlUploadTask) {
 	task.LocalPath = finalPath
 	task.Status = StatusCompleted
 
-	fmt.Printf("[UploadByUrl] completed: uploadId=%s, fileName=%s, size=%d\n",
+	g.Log().Infof(context.Background(), "[UploadByUrl] completed: uploadId=%s, fileName=%s, size=%d",
 		task.UploadId, task.FileName, task.FileSize)
 }
 
