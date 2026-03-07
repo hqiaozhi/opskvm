@@ -12,6 +12,7 @@ import (
 
 	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
+	"github.com/shirou/gopsutil/v4/cpu"
 )
 
 type SystemInfo struct {
@@ -22,6 +23,7 @@ type SystemInfo struct {
 	HostIP   string
 	BootTime string
 	Uptime   string
+	CpuModel string
 }
 
 func (s *System) SysInfo(ctx context.Context) (*SystemInfo, error) {
@@ -54,6 +56,11 @@ func (s *System) SysInfo(ctx context.Context) (*SystemInfo, error) {
 	if err == nil {
 		info.BootTime = bootTime
 		info.Uptime = uptime
+	}
+
+	cpuInfo, err := cpu.Info()
+	if err == nil && len(cpuInfo) > 0 {
+		info.CpuModel = cpuInfo[0].ModelName
 	}
 
 	return info, nil

@@ -3,7 +3,7 @@ package v1
 import "github.com/gogf/gf/v2/frame/g"
 
 type SysAllReq struct {
-	g.Meta `path:"system/sysall" method:"get" sm:"获取所有系统信息" tags:"系统管理"`
+	g.Meta `path:"system/sysall" method:"get" sm:"获取系统状态" tags:"系统管理"`
 }
 type SysAllRes struct {
 	Uptime                int64       `json:"uptime" dc:"运行时间(秒)"`

@@ -42,6 +42,7 @@ func (l *SysAllLogic) SysAll(ctx context.Context) (*v1.SysAllRes, error) {
 		res.Load15 = loadAvg.Load15
 
 		cpuCount, _ := cpu.Counts(true)
+		res.CpuTotal = cpuCount
 		if cpuCount > 0 {
 			res.LoadUsagePercent = (loadAvg.Load1 / float64(cpuCount)) * 100
 		}
@@ -55,20 +56,21 @@ func (l *SysAllLogic) SysAll(ctx context.Context) (*v1.SysAllRes, error) {
 
 	cpuTimes, err := cpu.Times(false)
 	if err == nil && len(cpuTimes) > 0 {
-		total := cpuTimes[0].Total()
-		idle := cpuTimes[0].Idle
+		t := cpuTimes[0]
+		total := t.User + t.Nice + t.System + t.Idle + t.Iowait + t.Irq + t.Softirq + t.Steal
+		idle := t.Idle
 		if total > 0 {
 			res.CpuUsed = ((total - idle) / total) * 100
 		}
 		res.CpuDetailedPercent = []float64{
-			cpuTimes[0].User,
-			cpuTimes[0].Nice,
-			cpuTimes[0].System,
-			cpuTimes[0].Idle,
-			cpuTimes[0].Iowait,
-			cpuTimes[0].Irq,
-			cpuTimes[0].Softirq,
-			cpuTimes[0].Steal,
+			t.User,
+			t.Nice,
+			t.System,
+			t.Idle,
+			t.Iowait,
+			t.Irq,
+			t.Softirq,
+			t.Steal,
 		}
 	}
 

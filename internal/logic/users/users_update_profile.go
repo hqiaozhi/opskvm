@@ -12,7 +12,8 @@ import (
 
 func (u *Users) UpdateProfile(ctx context.Context, userId int, nickname, email string) error {
 	var user entity.Users
-	err := dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
+	cls := dao.Users.Columns()
+	err := dao.Users.Ctx(ctx).Where(cls.Id, userId).Scan(&user)
 	if err != nil {
 		return gerror.New("database query error")
 	}
@@ -22,7 +23,7 @@ func (u *Users) UpdateProfile(ctx context.Context, userId int, nickname, email s
 	}
 
 	if email != "" && email != user.Email {
-		count, err := dao.Users.Ctx(ctx).Where("email", email).Count()
+		count, err := dao.Users.Ctx(ctx).Where(cls.Email, email).Count()
 		if err != nil {
 			return gerror.New("database query error")
 		}

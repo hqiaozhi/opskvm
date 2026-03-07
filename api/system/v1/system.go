@@ -18,6 +18,7 @@ type SysInfoRes struct {
 	HostIP   string `json:"hostIP" dc:"主机地址"`
 	BootTime string `json:"bootTime" dc:"启动时间"`
 	Uptime   string `json:"uptime" dc:"运行时间"`
+	CpuModel string `json:"cpuModel" dc:"CPU型号"`
 }
 
 type GetNetSpeedReq struct {

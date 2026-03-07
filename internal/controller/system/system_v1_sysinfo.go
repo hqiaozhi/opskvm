@@ -19,5 +19,6 @@ func (c *ControllerV1) SysInfo(ctx context.Context, req *v1.SysInfoReq) (res *v1
 		HostIP:   info.HostIP,
 		BootTime: info.BootTime,
 		Uptime:   info.Uptime,
+		CpuModel: info.CpuModel,
 	}, nil
 }

@@ -20,7 +20,8 @@ type UserInfo struct {
 
 func (u *Users) GetUserInfo(ctx context.Context, userId int) (*UserInfo, error) {
 	var user entity.Users
-	err := dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
+	cls := dao.Users.Columns()
+	err := dao.Users.Ctx(ctx).Where(cls.Id, userId).Scan(&user)
 	if err != nil {
 		return nil, gerror.New("database query error")
 	}
@@ -42,7 +43,8 @@ func (u *Users) GetUserInfo(ctx context.Context, userId int) (*UserInfo, error) 
 
 func (u *Users) GetUserById(ctx context.Context, userId int) (*entity.Users, error) {
 	var user entity.Users
-	err := dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
+	cls := dao.Users.Columns()
+	err := dao.Users.Ctx(ctx).Where(cls.Id, userId).Scan(&user)
 	if err != nil {
 		return nil, gerror.New("database query error")
 	}
