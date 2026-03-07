@@ -21,5 +21,6 @@ func (c *ControllerV1) Login(ctx context.Context, req *v1.LoginReq) (res *v1.Log
 	return &v1.LoginRes{
 		Token:        token,
 		TotpRequired: result.TwoFactorEnabled,
+		Uid:          result.UserId,
 	}, nil
 }

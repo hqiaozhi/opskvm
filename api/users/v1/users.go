@@ -11,6 +11,7 @@ type LoginReq struct {
 type LoginRes struct {
 	Token        string `json:"token" dc:"访问令牌"`
 	TotpRequired bool   `json:"totpRequired" dc:"是否需要TOTP验证"`
+	Uid          int    `json:"uid" dc:"用户ID"`
 }
 
 type LogoutReq struct {
@@ -48,4 +49,38 @@ type UpdateProfileReq struct {
 }
 
 type UpdateProfileRes struct {
+}
+
+type GetUserInfoReq struct {
+	g.Meta `path:"users/getUserInfo" method:"get" sm:"获取用户信息" tags:"用户管理"`
+	UserId int `json:"userId" dc:"用户ID"`
+}
+
+type GetUserInfoRes struct {
+	Id               int    `json:"id" dc:"用户ID"`
+	Username         string `json:"username" dc:"账户"`
+	Nickname         string `json:"nickname" dc:"昵称"`
+	Email            string `json:"email" dc:"邮箱"`
+	IsAdmin          int    `json:"isAdmin" dc:"是否管理员"`
+	TwoFactorEnabled int    `json:"twoFactorEnabled" dc:"是否启用TOTP"`
+	CreatedAt        string `json:"createdAt" dc:"创建时间"`
+}
+
+type GetUserListReq struct {
+	g.Meta `path:"users/getUserList" method:"get" sm:"获取用户列表" tags:"用户管理"`
+	Page   int `json:"page" dc:"页码"`
+	Limit  int `json:"limit" dc:"每页数量"`
+}
+
+type GetUserListRes struct {
+	Total int              `json:"total" dc:"总数"`
+	List  []GetUserInfoRes `json:"list" dc:"用户列表"`
+}
+
+type DeleteUserReq struct {
+	g.Meta `path:"users/deleteUser" method:"delete" sm:"删除用户" tags:"用户管理"`
+	UserId int `json:"userId" dc:"用户ID"`
+}
+
+type DeleteUserRes struct {
 }
