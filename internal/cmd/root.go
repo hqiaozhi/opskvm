@@ -34,6 +34,7 @@ type CIintInput struct {
 	Password string `short:"p" name:"password" default:"admin123"  brief:"login password"`
 	Debug    bool   `short:"d" name:"debug" brief:"debug mode" orphan:"true"`
 	RootPath string `short:"D" name:"rootpath" default:"/data/opskvm/"  brief:"root path (save data)"`
+	Enroll   string `short:"" name:"enroll" brief:"defaut false" orphan:"true"`
 
 	// JWT配置
 	SecretKey     string        `short:"s" name:"secretkey" default:"hv4cW0kHLoigQcmVlHACmOIwVFaIQhd0qIf7SXgy4sffFRcmere85VKZrtbuMcH9"  brief:"jwt secret key"`

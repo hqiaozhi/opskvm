@@ -3,33 +3,22 @@ package users
 import (
 	"context"
 	"opskvm/internal/dao"
-	"opskvm/internal/model/entity"
+	"opskvm/internal/model/do"
 
 	"github.com/gogf/gf/v2/errors/gerror"
-	"github.com/gogf/gf/v2/os/gtime"
+	"github.com/gogf/gf/v2/frame/g"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func (u *Users) Register(ctx context.Context, username, password, nickname, email string) (int, error) {
-	var existUser entity.Users
-	err := dao.Users.Ctx(ctx).Where("username", username).Scan(&existUser)
+	count, err := dao.Users.Ctx(ctx).Where("username", username).Count()
 	if err != nil {
-		return 0, gerror.New("database query error")
+		g.Log().Errorf(ctx, "database query error: %s", err.Error())
+		return 0, gerror.Newf("database query error: %s", err.Error())
 	}
 
-	if existUser.Username == username {
+	if count > 0 {
 		return 0, gerror.New("username already exists")
-	}
-
-	if email != "" {
-		var existEmail entity.Users
-		err := dao.Users.Ctx(ctx).Where("email", email).Scan(&existEmail)
-		if err != nil {
-			return 0, gerror.New("database query error")
-		}
-		if existEmail.Email == email {
-			return 0, gerror.New("email already exists")
-		}
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -41,16 +30,15 @@ func (u *Users) Register(ctx context.Context, username, password, nickname, emai
 		nickname = username
 	}
 
-	userId, err := dao.Users.Ctx(ctx).InsertAndGetId(entity.Users{
-		Username:  username,
-		Password:  string(hashedPassword),
-		Nickname:  nickname,
-		Email:     email,
-		IsAdmin:   0,
-		CreatedAt: gtime.Now(),
-		UpdatedAt: gtime.Now(),
+	userId, err := dao.Users.Ctx(ctx).InsertAndGetId(do.Users{
+		Username: username,
+		Password: string(hashedPassword),
+		Nickname: nickname,
+		Email:    email,
+		IsAdmin:  0,
 	})
 	if err != nil {
+		g.Log().Errorf(ctx, "failed to create user: %s", err.Error())
 		return 0, gerror.New("failed to create user")
 	}
 
