@@ -150,7 +150,7 @@ func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.S
 		}
 
 		if err = conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
-			g.Log().Errorf(ctx, "[%s] Write frame data error: %v", gReq.GetClientIp(), err)
+			g.Log().Warningf(ctx, "[%s] Write frame data error: %v", gReq.GetClientIp(), err)
 			return
 		}
 	}
