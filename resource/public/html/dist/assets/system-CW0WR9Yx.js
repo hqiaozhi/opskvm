@@ -1,0 +1,1 @@
+import{f as e}from"./index-D1XqdgJW.js";const t=()=>e({url:`/api/v1/system/restart`,method:`post`}),n=()=>e({url:`/api/v1/system/sysinfo`,method:`get`}),r=()=>e({url:`/api/v1/system/getnetspeed`,method:`get`}),i=()=>e({url:`/api/v1/system/sysall`,method:`get`});export{t as i,r as n,i as r,n as t};

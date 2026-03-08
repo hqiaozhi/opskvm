@@ -1,0 +1,1 @@
+import{Tt as e,ft as t,ht as n,x as r,yt as i}from"./index-D1XqdgJW.js";var a={style:{"text-align":`center`,"margin-top":`100px`}},o=i({__name:`403Page`,setup(i){let o=r(),s=()=>o.push(`/`);return(r,i)=>(e(),n(`div`,a,[i[0]||=t(`h1`,null,`403 无权限访问`,-1),i[1]||=t(`p`,null,`你没有权限访问该页面，请联系管理员`,-1),t(`button`,{onClick:s},`返回首页`)]))}});export{o as default};

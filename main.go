@@ -1,8 +1,6 @@
 package main
 
 import (
-	_ "opskvm/internal/packed"
-
 	"opskvm/internal/cmd"
 	"os"
 
@@ -14,7 +12,7 @@ import (
 )
 
 const (
-	VERSION = "v0.0.1"
+	VERSION = "v0.0.2"
 )
 
 func main() {
@@ -29,5 +27,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	root.Run(gctx.New())
 }

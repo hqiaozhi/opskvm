@@ -12,8 +12,9 @@ import (
 func (c Init) cmdLine(ctx context.Context, in CIintInput) error {
 	// Version.
 	if in.Version {
-		_, err := Version.Index(ctx, cVersionInput{})
-		return err
+		Version.Index(ctx, cVersionInput{})
+		os.Exit(0)
+		return nil
 	}
 
 	// 设置Debug模式
@@ -34,5 +35,6 @@ func (c Init) cmdLine(ctx context.Context, in CIintInput) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

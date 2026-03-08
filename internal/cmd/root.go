@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
 	"opskvm/internal/controller/files"
 	"opskvm/internal/controller/kvm"
 	"opskvm/internal/controller/mirrors"
@@ -10,6 +11,7 @@ import (
 	"opskvm/internal/controller/users"
 	"opskvm/internal/controller/wake"
 	"opskvm/internal/controller/webshell"
+	_ "opskvm/internal/packed"
 	"opskvm/internal/service"
 	fileService "opskvm/internal/service/files"
 	"time"
@@ -32,9 +34,12 @@ type CIintInput struct {
 	Port     string `short:"P" name:"port" default:"8080"  brief:"port of http server"`
 	Username string `short:"u" name:"username" default:"admin"  brief:"login username"`
 	Password string `short:"p" name:"password" default:"admin123"  brief:"login password"`
-	Debug    bool   `short:"d" name:"debug" brief:"debug mode" orphan:"true"`
+	Debug    bool   `short:"d" name:"debug" brief:"debug mode,default false (true/false)" orphan:"true"`
 	RootPath string `short:"D" name:"rootpath" default:"/data/opskvm/"  brief:"root path (save data)"`
-	Enroll   string `short:"" name:"enroll" brief:"defaut false" orphan:"true"`
+	Enroll   bool   `short:"" name:"enroll" brief:"defaut false (true/false)" orphan:"true"`
+	Ssl      bool   `short:"S" name:"ssl" brief:"defaut true (true/false)" orphan:"true"`
+	Swagger  bool   `short:"" name:"swagger" brief:"defaut false (true/false)" orphan:"true"`
+	Cors     bool   `short:"" name:"cors" brief:"defaut false (true/false)" orphan:"true"`
 
 	// JWT配置
 	SecretKey     string        `short:"s" name:"secretkey" default:"hv4cW0kHLoigQcmVlHACmOIwVFaIQhd0qIf7SXgy4sffFRcmere85VKZrtbuMcH9"  brief:"jwt secret key"`
@@ -75,17 +80,57 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 	service.New(in.RootPath, in.Debug)
 
 	s := g.Server()
+	if !in.Ssl {
+		err = NewSSLGenerator().Generate(ctx, in.RootPath, "cn", []string{}, []string{})
+		if err != nil {
+			return nil, err
+		}
+		s.SetHTTPSAddr(in.Host + ":" + in.Port)
+		g.Log().Infof(ctx, "HTTPS enabled CertFile: %s KeyFile: %s", in.RootPath+"server.crt", in.RootPath+"server.key")
+		s.EnableHTTPS(in.RootPath+"server.crt", in.RootPath+"server.key", &tls.Config{
+			InsecureSkipVerify: true,
+		})
 
-	s.SetGraceful(true)
-	s.SetAddr(in.Host + ":" + in.Port)
-	s.SetOpenApiPath("/api.json")
-	s.SetSwaggerPath("/swagger")
+	} else {
+		s.SetAddr(in.Host + ":" + in.Port)
+	}
 
+	if in.Swagger {
+		s.SetOpenApiPath("/api.json")
+		s.SetSwaggerPath("/swagger")
+	}
+
+	// 下载服务
 	staticDir := fileService.GetFileManagerService(in.RootPath).GetStorageDir()
 	s.AddStaticPath("/downloads", staticDir)
 
+	// 设置静态服务（web）
+	// 这里是打包最终的目录
+	// 例如命令：gf packed resource/public/html/dist internal/packed/data.go -n packed
+	// resource/public/html/dist的最后的目录为dist
+	// 需要导入 _ "opskvm/internal/packed" 才能直接使用
+	s.SetServerRoot("dist") // 设置后访问 / 即可访问到dist下的静态资源
+	// 重写
+	s.SetRewriteMap(map[string]string{
+		"/register":              "/",
+		"/admin":                 "/",
+		"/admin/remote":          "/",
+		"/admin/file":            "/",
+		"/admin/shell":           "/",
+		"/admin/mirrors":         "/",
+		"/admin/wol":             "/",
+		"/admin/settings":        "/",
+		"/admin/settings/system": "/",
+		"/admin/settings/mouse":  "/",
+		"/admin/settings/camera": "/",
+		"/admin/settings/user":   "/",
+		"/admin/settings/totp":   "/",
+	})
+
+	// 路由对象注册
 	s.Group("/api/v1", func(group *ghttp.RouterGroup) {
-		group.Middleware(ghttp.MiddlewareHandlerResponse, MiddlewareCORS, MiddlewareAuth)
+		group.Middleware(ghttp.MiddlewareHandlerResponse, CORSMode(in.Cors), MiddlewareAuth)
+
 		group.Bind(
 			kvm.NewV1(),
 			users.NewV1(),
@@ -97,10 +142,17 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 			totp.NewV1(),
 		)
 	})
-
+	s.SetGraceful(true)
 	s.Run()
 
 	// 等待service清理完毕才退出
 	<-service.Svc.Done
 	return
+}
+
+func CORSMode(mode bool) func(r *ghttp.Request) {
+	if mode {
+		return MiddlewareCORS
+	}
+	return func(r *ghttp.Request) { r.Middleware.Next() }
 }
