@@ -9,6 +9,7 @@ import (
 type MSDInterface interface {
 	AddMSD() error
 	Bind(absoltePath, cdrom string) error
+	GetPath() (string, error)
 	Remove() error
 }
 
@@ -24,6 +25,14 @@ func NewMSD(gadget GadgetInterface) MSDInterface {
 	return &MSD{
 		GadgetInterface: gadget,
 	}
+}
+
+func (m *MSD) GetPath() (string, error) {
+	content, err := m.Read(filepath.Join(m.funcPath, "lun.0/file"))
+	if err != nil {
+		return "", err
+	}
+	return content, nil
 }
 
 // AddMSD 创建功能

@@ -22,4 +22,6 @@ type IFilesV1 interface {
 	DeleteFile(ctx context.Context, req *v1.DeleteFileReq) (res *v1.DeleteFileRes, err error)
 	GetStorageInfo(ctx context.Context, req *v1.GetStorageInfoReq) (res *v1.GetStorageInfoRes, err error)
 	CreateDirectory(ctx context.Context, req *v1.CreateDirectoryReq) (res *v1.CreateDirectoryRes, err error)
+	ListDevices(ctx context.Context, req *v1.ListDevicesReq) (res *v1.ListDevicesRes, err error)
+	MountDevice(ctx context.Context, req *v1.MountDeviceReq) (res *v1.MountDeviceRes, err error)
 }

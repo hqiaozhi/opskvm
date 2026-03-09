@@ -32,11 +32,14 @@ type SVC struct {
 	MirrorsManagerService     mirrors.IMirrorsManagerService
 	SQL                       sqlite.Sqliter
 	WOL                       wol.WOLInterface
+	RootPath                  string
 	Done                      chan struct{}
 }
 
 func New(rootPath string, debug bool) {
 	Svc = &SVC{}
+	Svc.RootPath = rootPath
+
 	// 初始化OTG
 	Svc.initOTG()
 	// 初始化视频

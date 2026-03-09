@@ -16,6 +16,7 @@ type GadgetInterface interface {
 	Mkdir(path string) error
 	Write(path string, value string) error
 	WriteBytes(path string, data []byte) error
+	Read(path string) (string, error)
 	Symlink(src, dest string) error
 	Rmdir(path string) error
 	Unlink(path string) error
@@ -67,6 +68,15 @@ func (g *Gadget) Write(path string, value string) error {
 func (g *Gadget) WriteBytes(path string, data []byte) error {
 	// 写入文件，不存在则创建
 	return os.WriteFile(path, data, 0644)
+}
+
+// Read 读取文件内容
+func (g *Gadget) Read(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
 }
 
 // Symlink 创建符号链接

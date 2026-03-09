@@ -149,3 +149,10 @@ type MsdManagerReq struct {
 }
 type MsdManagerRes struct {
 }
+
+type GetMsdStatusReq struct {
+	g.Meta `path:"mirrors/msd" method:"get" sm:"获取介质状态" tags:"镜像管理"`
+}
+type GetMsdStatusRes struct {
+	Path string `json:"path" dc:"返回挂载对象，为空则表示未挂载"`
+}

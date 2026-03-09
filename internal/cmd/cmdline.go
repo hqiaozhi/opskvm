@@ -19,6 +19,9 @@ func (c Init) cmdLine(ctx context.Context, in CIintInput) error {
 
 	// 设置Debug模式
 	g.SetDebug(in.Debug)
+	if in.Debug {
+		g.Log().SetLevelStr("debug")
+	}
 
 	// Device
 	if in.VideoDevice {

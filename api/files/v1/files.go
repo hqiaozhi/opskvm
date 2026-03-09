@@ -157,3 +157,37 @@ type CreateDirectoryReq struct {
 type CreateDirectoryRes struct {
 	Path string `json:"path" dc:"创建的目录路径"`
 }
+
+type DeviceInfo struct {
+	DevPath     string `json:"dev_path" dc:"设备路径，如/dev/sda"`
+	MountPoint  string `json:"mount_point" dc:"挂载点，如/mnt/usb"`
+	Name        string `json:"name" dc:"设备名称，如sda"`
+	Model       string `json:"model" dc:"设备型号，硬盘/优盘特有"`
+	Capacity    string `json:"capacity" dc:"设备容量，硬盘/优盘特有"`
+	Partition   string `json:"partition" dc:"分区号，如1，分区特有"`
+	FsType      string `json:"fs_type" dc:"文件系统类型，如ext4/vfat"`
+	Size        int64  `json:"size" dc:"分区大小（字节）"`
+	Used        int64  `json:"used" dc:"已使用空间（字节）"`
+	Available   int64  `json:"available" dc:"可用空间（字节）"`
+	UsedPercent int    `json:"used_percent" dc:"使用百分比"`
+	IsPartition bool   `json:"is_partition" dc:"是否为分区"`
+	IsMounted   bool   `json:"is_mounted" dc:"是否已挂载"`
+}
+
+type ListDevicesReq struct {
+	g.Meta `path:"files/devices" method:"get" sm:"获取设备列表" tags:"文件管理"`
+}
+
+type ListDevicesRes struct {
+	Devices []DeviceInfo `json:"devices" dc:"设备列表"`
+}
+
+type MountDeviceReq struct {
+	g.Meta  `path:"files/mount" method:"post" sm:"挂载/卸载设备" tags:"文件管理"`
+	DevPath string `json:"dev_path" dc:"设备路径，如/dev/sda1，留空则执行卸载"`
+}
+
+type MountDeviceRes struct {
+	DevPath    string `json:"dev_path" dc:"设备路径"`
+	MountPoint string `json:"mount_point" dc:"挂载点"`
+}
