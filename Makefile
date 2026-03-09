@@ -29,5 +29,5 @@ go: dep rmbin
 	GOOS=linux GOARCH=arm64  go build -ldflags "-s -w" -o  bin/go/opskvm-linux-arm64-${VERSION} main.go
 	@chmod +x -R bin/go/*
 
-install: build
-	install -m 755 bin/opskvm-linux-arm64-${VERSION} /usr/local/bin/opskvm
+install:
+	install -m 755 bin/go/opskvm-linux-arm64-${VERSION} /usr/local/bin/opskvm

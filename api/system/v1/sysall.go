@@ -17,6 +17,7 @@ type SysAllRes struct {
 	CpuUsedPercent        float64     `json:"cpuUsedPercent" dc:"CPU使用百分比"`
 	CpuUsed               float64     `json:"cpuUsed" dc:"CPU使用率"`
 	CpuTotal              int         `json:"cpuTotal" dc:"CPU核心数"`
+	CpuTemperature        float64     `json:"cpuTemperature" dc:"CPU温度(摄氏度)"`
 	CpuDetailedPercent    []float64   `json:"cpuDetailedPercent" dc:"详细CPU百分比"`
 	MemoryTotal           uint64      `json:"memoryTotal" dc:"内存总量"`
 	MemoryUsed            uint64      `json:"memoryUsed" dc:"已用内存"`
