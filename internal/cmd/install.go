@@ -38,15 +38,16 @@ func (i install) Index(ctx context.Context, in installInput) (out *InstallOutput
 		os.Exit(1)
 	}
 
-	
-	
 	// 服务文件路径
 	servicePath := "/lib/systemd/system/opskvm.service"
 	if _, err := os.Stat(servicePath); err == nil {
-		
+		g.Log().Info(ctx, "stop old opskvm service...")
+		if err := exec.Command("systemctl", "stop", "opskvm.service").Run(); err != nil {
+			g.Log().Warning(ctx, "Failed to stop opskvm service (might not be running): ", err)
+		}
 		os.RemoveAll(servicePath)
 	}
-	
+
 	// 目标安装路径
 	targetExecPath := "/usr/local/bin/opskvm"
 	if _, err := os.Stat(targetExecPath); err == nil {
@@ -69,7 +70,7 @@ func (i install) Index(ctx context.Context, in installInput) (out *InstallOutput
 		{Section: "Unit", Name: "Description", Value: "opskvm service"},
 		{Section: "Unit", Name: "After", Value: "network.target"},
 		{Section: "Service", Name: "Type", Value: "simple"},
-		{Section: "Service", Name: "ExecStart", Value: fmt.Sprintf("%s --hidmode %s", targetExecPath, detectHIDMode())},
+		{Section: "Service", Name: "ExecStart", Value: fmt.Sprintf("%s --hidmode %s", targetExecPath, detectHIDMode(ctx))},
 		{Section: "Service", Name: "Restart", Value: "on-failure"},
 		{Section: "Service", Name: "RestartSec", Value: "5"},
 		{Section: "Service", Name: "User", Value: "root"},
@@ -120,7 +121,7 @@ func (i install) Index(ctx context.Context, in installInput) (out *InstallOutput
 	return
 }
 
-func detectHIDMode() string {
+func detectHIDMode(ctx context.Context) string {
 	otgExists := false
 	ch9329Exists := false
 
@@ -136,13 +137,13 @@ func detectHIDMode() string {
 
 	if otgExists || ch9329Exists {
 		if !otgExists && ch9329Exists {
-			g.Log().Info(context.Background(), "Only CH9329 device found, using --hidmode ch9329")
+			g.Log().Info(ctx, "Only CH9329 device found, using --hidmode ch9329")
 			return "ch9329"
 		}
-		g.Log().Info(context.Background(), "OTG device found or both devices exist, using --hidmode otg")
+		g.Log().Info(ctx, "OTG device found or both devices exist, using --hidmode otg")
 		return "otg"
 	}
 
-	g.Log().Warning(context.Background(), "No HID device found, defaulting to --hidmode otg")
+	g.Log().Warning(ctx, "No HID device found, defaulting to --hidmode otg")
 	return "otg"
 }
