@@ -27,6 +27,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	err = root.AddObject(
+		cmd.Install,
+		cmd.Uninstall,
+	)
+	if err != nil {
+		panic(err)
+	}
 
 	root.Run(gctx.New())
 }

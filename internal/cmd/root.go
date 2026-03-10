@@ -24,11 +24,11 @@ import (
 var ROOT = Init{}
 
 type Init struct {
-	g.Meta `name:"main"`
+	g.Meta `name:"opskvm" brief:"run"`
 }
 
 type CIintInput struct {
-	g.Meta `name:"main"`
+	g.Meta `name:"opskvm"`
 	// APP配置
 	Host     string `short:"H" name:"host" default:"0.0.0.0" brief:"server host"`
 	Port     string `short:"P" name:"port" default:"8080"  brief:"port of http server"`
