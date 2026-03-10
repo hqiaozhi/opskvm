@@ -5,36 +5,44 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/korandiz/v4l"
 	"github.com/korandiz/v4l/fmt/mjpeg"
 )
 
+var (
+	CameraWatcherEnabled    bool
+	CameraWatcherStopCh     chan struct{}
+	CameraWatcherDevicePath string
+)
+
 // Camera 定义摄像头设备的核心操作接口
 type Camera interface {
 	FindDevicePath() string
 	Open(path string) error
+	ApplyConfig(width, height int, fps uint32) error
 	ListConfigs() ([]v4l.DeviceConfig, error)
 	GetConfig() (v4l.DeviceConfig, error)
 	SetConfig(cfg v4l.DeviceConfig) error
 	UpdateConfig(width, height int, fps uint32) (v4l.DeviceConfig, error)
 	TurnOn() error
 	TurnOff() error
-	GetStatus() bool // 获取摄像头开关状态
+	GetStatus() bool
 	Capture() ([]byte, error)
 	ResetControls() error
 	Close() error
 }
 
-// V4LCamera 是Camera接口的V4L实现（path字段保存设备路径）
+// V4LCamera 是Camera接口的V4L实现
 type V4LCamera struct {
 	dev       *v4l.Device
-	path      string     // 保存设备路径，用于重新打开
-	mu        sync.Mutex // 配置更新锁
+	path      string
+	mu        sync.Mutex
 	cfg       v4l.DeviceConfig
-	isOn      bool       // 摄像头开关状态
-	captureMu sync.Mutex // 采集锁，避免并发采集问题
+	isOn      bool
+	captureMu sync.Mutex
 }
 
 func NewV4LCamera() *V4LCamera {
@@ -54,13 +62,12 @@ func (c *V4LCamera) Open(path string) error {
 	if path == "" {
 		path = c.FindDevicePath()
 	}
-
 	dev, err := v4l.Open(path)
 	if err != nil {
 		return err
 	}
 	c.dev = dev
-	c.path = path // 保存设备路径
+	c.path = path
 	cfg, err := dev.GetConfig()
 	if err != nil {
 		return err
@@ -70,21 +77,14 @@ func (c *V4LCamera) Open(path string) error {
 	return nil
 }
 
-// ApplyConfig 应用配置到摄像头
 func (c *V4LCamera) ApplyConfig(width, height int, fps uint32) error {
-	// c.mu.Lock()
-	// defer c.mu.Unlock()
-
 	if c.dev == nil {
 		return fmt.Errorf("camera device not open")
 	}
-
-	// 只有在配置值大于0时才应用
 	if width > 0 && height > 0 && fps > 0 {
 		_, err := c.UpdateConfig(width, height, fps)
 		return err
 	}
-
 	return nil
 }
 
@@ -116,16 +116,13 @@ func (c *V4LCamera) SetConfig(cfg v4l.DeviceConfig) error {
 	return nil
 }
 
-// UpdateConfig 关闭设备→重新打开→应用新配置
 func (c *V4LCamera) UpdateConfig(width, height int, fps uint32) (v4l.DeviceConfig, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// 1. 保存原有状态，用于失败时恢复
 	oldCfg := c.cfg
 	oldDev := c.dev
 
-	// 2. 构建新配置
 	newCfg := oldCfg
 	if width > 0 {
 		newCfg.Width = width
@@ -137,19 +134,16 @@ func (c *V4LCamera) UpdateConfig(width, height int, fps uint32) (v4l.DeviceConfi
 		newCfg.FPS = v4l.Frac{N: fps, D: 1}
 	}
 
-	// 3. 验证配置是否支持
 	supportedCfgs, err := oldDev.ListConfigs()
 	if err != nil {
 		return oldCfg, fmt.Errorf("failed to list supported configs: %v", err)
 	}
 
-	// 检查设备是否支持该分辨率和格式
 	resolutionSupported := false
 	supportedFPS := make([]uint32, 0)
 	for _, cfg := range supportedCfgs {
 		if cfg.Format == mjpeg.FourCC && cfg.Width == newCfg.Width && cfg.Height == newCfg.Height {
 			resolutionSupported = true
-			// 收集该分辨率支持的所有帧率
 			if cfg.FPS.N > 0 && cfg.FPS.D > 0 {
 				supportedFPS = append(supportedFPS, cfg.FPS.N/cfg.FPS.D)
 			}
@@ -160,84 +154,71 @@ func (c *V4LCamera) UpdateConfig(width, height int, fps uint32) (v4l.DeviceConfi
 		return oldCfg, fmt.Errorf("config %dx%d is not supported", newCfg.Width, newCfg.Height)
 	}
 
-	// 如果指定了帧率，检查是否支持
 	if fps > 0 {
 		fpsSupported := false
-		// 检查帧率是否在支持列表中
 		for _, supportedFrameRate := range supportedFPS {
 			if supportedFrameRate == fps {
 				fpsSupported = true
 				break
 			}
 		}
-		// 如果支持列表为空，说明设备支持任意帧率
 		if len(supportedFPS) == 0 {
 			fpsSupported = true
 		}
-
 		if !fpsSupported {
-			return oldCfg, fmt.Errorf("fps %d is not supported for config %dx%d, supported fps: %v", fps, newCfg.Width, newCfg.Height, supportedFPS)
+			return oldCfg, fmt.Errorf("fps %d is not supported for config %dx%d", fps, newCfg.Width, newCfg.Height)
 		}
 	}
 
-	g.Log().Info(context.Background(), "Closing camera device for config update...")
 	oldDev.Close()
 	c.dev = nil
 
-	g.Log().Info(context.Background(), "Reopening camera device with new config...")
 	newDev, err := v4l.Open(c.path)
 	if err != nil {
-		// 尝试恢复原有设备（打开失败时）
 		recoverDev, recoverErr := v4l.Open(c.path)
 		if recoverErr != nil {
-			return oldCfg, fmt.Errorf("failed to reopen device: %v (and recover failed: %v)", err, recoverErr)
+			return oldCfg, fmt.Errorf("failed to reopen device: %v", err)
 		}
 		c.dev = recoverDev
-		return oldCfg, fmt.Errorf("failed to reopen device: %v (recovered old device)", err)
+		return oldCfg, fmt.Errorf("failed to reopen device")
 	}
 	c.dev = newDev
 
-	// 6. 应用新配置到新打开的设备
-	newCfg.Format = mjpeg.FourCC // 强制MJPEG格式
+	newCfg.Format = mjpeg.FourCC
 	if err := newDev.SetConfig(newCfg); err != nil {
-		// 配置设置失败，恢复原有设备
 		newDev.Close()
 		recoverDev, recoverErr := v4l.Open(c.path)
 		if recoverErr != nil {
-			return oldCfg, fmt.Errorf("failed to set new config: %v (recover failed: %v)", err, recoverErr)
+			return oldCfg, fmt.Errorf("failed to set config")
 		}
 		c.dev = recoverDev
 		c.dev.SetConfig(oldCfg)
 		c.dev.TurnOn()
-		return oldCfg, fmt.Errorf("failed to set new config: %v (recovered old config)", err)
+		return oldCfg, fmt.Errorf("failed to set config")
 	}
 
-	// 7. 启动新配置的设备
 	if err := newDev.TurnOn(); err != nil {
-		// 启动失败，恢复原有设备
 		newDev.Close()
 		recoverDev, recoverErr := v4l.Open(c.path)
 		if recoverErr != nil {
-			return oldCfg, fmt.Errorf("failed to turn on new config: %v (recover failed: %v)", err, recoverErr)
+			return oldCfg, fmt.Errorf("failed to turn on")
 		}
 		c.dev = recoverDev
 		c.dev.SetConfig(oldCfg)
 		c.dev.TurnOn()
-		c.isOn = true // 更新摄像头状态
-		return oldCfg, fmt.Errorf("failed to turn on new config: %v (recovered old config)", err)
+		c.isOn = true
+		return oldCfg, fmt.Errorf("failed to turn on")
 	}
 
-	// 更新摄像头状态
 	c.isOn = true
 
-	// 8. 获取实际生效的配置
 	actualCfg, err := newDev.GetConfig()
 	if err != nil {
-		return newCfg, fmt.Errorf("failed to get actual config: %v (but config applied)", err)
+		return newCfg, fmt.Errorf("failed to get actual config")
 	}
 	c.cfg = actualCfg
 
-	g.Log().Infof(context.Background(), "Camera config updated successfully: %dx%d @ %.2f FPS",
+	g.Log().Infof(context.Background(), "Camera config updated: %dx%d @ %.2f FPS",
 		actualCfg.Width, actualCfg.Height,
 		float64(actualCfg.FPS.N)/float64(actualCfg.FPS.D))
 
@@ -263,12 +244,11 @@ func (c *V4LCamera) TurnOff() error {
 	if c.dev == nil {
 		return fmt.Errorf("camera device not open")
 	}
-	c.dev.TurnOff() // TurnOff方法没有返回值，直接调用
+	c.dev.TurnOff()
 	c.isOn = false
 	return nil
 }
 
-// GetStatus 获取摄像头开关状态
 func (c *V4LCamera) GetStatus() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -317,14 +297,136 @@ func (c *V4LCamera) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.dev != nil {
-		c.dev.Close()
+		dev := c.dev
 		c.dev = nil
+		dev.Close()
 	}
 	return nil
 }
 
-// cfg2str 将设备配置转为字符串
-func Cfg2str(cfg v4l.DeviceConfig) string {
-	return fmt.Sprintf("%dx%d @ %.4g FPS", cfg.Width, cfg.Height,
-		float64(cfg.FPS.N)/float64(cfg.FPS.D))
+// CheckCameraExists 检查摄像头设备是否存在
+func CheckCameraExists(devicePath string) bool {
+	_, err := os.Stat(devicePath)
+	return err == nil
+}
+
+// WaitForCamera 等待摄像头设备插入
+func WaitForCamera(devicePath string, maxWaitTime time.Duration, checkInterval time.Duration) (string, error) {
+	startTime := time.Now()
+
+	for {
+		targetPath := devicePath
+		if targetPath == "" {
+			devs := v4l.FindDevices()
+			if len(devs) > 0 {
+				g.Log().Infof(context.Background(), "Found camera device: %s", devs[0].Path)
+				return devs[0].Path, nil
+			}
+		} else {
+			if CheckCameraExists(targetPath) {
+				g.Log().Infof(context.Background(), "Found camera device: %s", targetPath)
+				return targetPath, nil
+			}
+		}
+
+		if maxWaitTime > 0 && time.Since(startTime) >= maxWaitTime {
+			return "", fmt.Errorf("camera: Timeout waiting for device")
+		}
+
+		g.Log().Infof(context.Background(), "Waiting for camera device to be inserted...")
+		time.Sleep(checkInterval)
+	}
+}
+
+// findCameraDevice 查找摄像头设备
+func findCameraDevice() string {
+	devs := v4l.FindDevices()
+	if len(devs) > 0 {
+		return devs[0].Path
+	}
+	return ""
+}
+
+// StartCameraWatcher 启动摄像头设备状态监控器
+func StartCameraWatcher(onLost func(), onReconnect func(newDevicePath string)) {
+	CameraWatcherEnabled = true
+	CameraWatcherStopCh = make(chan struct{})
+
+	g.Log().Infof(context.Background(), "Camera watcher starting...")
+
+	go func() {
+		for {
+			select {
+			case <-CameraWatcherStopCh:
+				g.Log().Info(context.Background(), "Camera watcher stopped")
+				return
+			default:
+			}
+
+			currentPath := findCameraDevice()
+
+			if currentPath == "" {
+				g.Log().Infof(context.Background(), "No camera found, waiting for device...")
+				for {
+					select {
+					case <-CameraWatcherStopCh:
+						g.Log().Info(context.Background(), "Camera watcher stopped while waiting")
+						return
+					default:
+					}
+
+					newPath := findCameraDevice()
+					if newPath != "" {
+						g.Log().Infof(context.Background(), "Camera device found: %s", newPath)
+						CameraWatcherDevicePath = newPath
+						if onReconnect != nil {
+							onReconnect(newPath)
+						}
+						break
+					}
+					time.Sleep(1 * time.Second)
+				}
+			} else if !CheckCameraExists(currentPath) {
+				g.Log().Warningf(context.Background(), "Camera device lost!")
+				CameraWatcherDevicePath = ""
+				if onLost != nil {
+					onLost()
+				}
+
+				for {
+					select {
+					case <-CameraWatcherStopCh:
+						g.Log().Info(context.Background(), "Camera watcher stopped while waiting for reconnection")
+						return
+					default:
+					}
+
+					newPath := findCameraDevice()
+					if newPath != "" {
+						g.Log().Infof(context.Background(), "Camera device reconnected: %s", newPath)
+						CameraWatcherDevicePath = newPath
+						if onReconnect != nil {
+							onReconnect(newPath)
+						}
+						break
+					}
+					time.Sleep(1 * time.Second)
+				}
+			}
+
+			time.Sleep(1 * time.Second)
+		}
+	}()
+	g.Log().Infof(context.Background(), "Camera watcher started")
+}
+
+// StopCameraWatcher 停止摄像头设备监控器
+func StopCameraWatcher() {
+	if CameraWatcherEnabled {
+		g.Log().Infof(context.Background(), "Stopping camera watcher...")
+		CameraWatcherEnabled = false
+		if CameraWatcherStopCh != nil {
+			close(CameraWatcherStopCh)
+		}
+	}
 }

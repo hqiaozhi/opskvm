@@ -1,11 +1,21 @@
 package ch9329
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
 	"go.bug.st/serial"
+
+	gLog "github.com/gogf/gf/v2/frame/g"
+)
+
+var (
+	CH9329WatcherEnabled    bool
+	CH9329WatcherStopCh     chan struct{}
+	CH9329WatcherDevicePath string
 )
 
 // CH9329 命令类型
@@ -212,4 +222,109 @@ func (d *CH9329Device) GetInfo() error {
 	// GET_INFO = [0x00, 0x01, 0x00]
 	infoCmd := []byte{0x00, 0x01, 0x00}
 	return d.sendCommand(infoCmd)
+}
+
+// CheckDeviceExists 检查 CH9329 设备是否存在
+func CheckDeviceExists(devicePath string) bool {
+	_, err := os.Stat(devicePath)
+	return err == nil
+}
+
+// WaitForCH9329 等待 CH9329 设备插入
+// devicePath: 设备路径，为空则自动查找
+// maxWaitTime: 最大等待时间，0 表示无限等待
+// checkInterval: 检查间隔
+func WaitForCH9329(devicePath string, maxWaitTime time.Duration, checkInterval time.Duration) (string, error) {
+	startTime := time.Now()
+
+	for {
+		targetPath := devicePath
+		if targetPath == "" {
+			matches, err := filepath.Glob("/dev/ttyUSB*")
+			if err == nil && len(matches) > 0 {
+				gLog.Log().Infof(context.Background(), "Found CH9329 device: %s", matches[0])
+				return matches[0], nil
+			}
+		} else {
+			if CheckDeviceExists(targetPath) {
+				gLog.Log().Infof(context.Background(), "Found CH9329 device: %s", targetPath)
+				return targetPath, nil
+			}
+		}
+
+		if maxWaitTime > 0 && time.Since(startTime) >= maxWaitTime {
+			return "", fmt.Errorf("CH9329: Timeout waiting for device")
+		}
+
+		gLog.Log().Infof(context.Background(), "Waiting for CH9329 device to be inserted...")
+		time.Sleep(checkInterval)
+	}
+}
+
+// StartCH9329Watcher 启动 CH9329 设备状态监控器
+// devicePath: 初始设备路径，如果是空则自动检测设备类别
+// onLost: 设备丢失时的回调
+// onReconnect: 设备重新插入时的回调，传入新的设备路径
+func StartCH9329Watcher(devicePath string, onLost func(), onReconnect func(newDevicePath string)) {
+	CH9329WatcherEnabled = true
+	CH9329WatcherStopCh = make(chan struct{})
+	CH9329WatcherDevicePath = devicePath
+
+	go func() {
+		for {
+			select {
+			case <-CH9329WatcherStopCh:
+				gLog.Log().Info(context.Background(), "CH9329 watcher stopped")
+				return
+			default:
+				if !CheckDeviceExists(devicePath) {
+					gLog.Log().Warningf(context.Background(), "CH9329 device %s lost!", devicePath)
+					if onLost != nil {
+						onLost()
+					}
+
+					for {
+						select {
+						case <-CH9329WatcherStopCh:
+							return
+						default:
+							newPath := findCH9329Device(devicePath)
+							if newPath != "" {
+								gLog.Log().Infof(context.Background(), "CH9329 device reconnected: %s", newPath)
+								devicePath = newPath
+								CH9329WatcherDevicePath = newPath
+								if onReconnect != nil {
+									onReconnect(newPath)
+								}
+								goto WaitNext
+							}
+							time.Sleep(1 * time.Second)
+						}
+					}
+				WaitNext:
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}()
+	gLog.Log().Infof(context.Background(), "CH9329 watcher started for device: %s", devicePath)
+}
+
+func findCH9329Device(originalPath string) string {
+	if originalPath != "" && CheckDeviceExists(originalPath) {
+		return originalPath
+	}
+	matches, _ := filepath.Glob("/dev/ttyUSB*")
+	if len(matches) > 0 {
+		return matches[0]
+	}
+	return ""
+}
+
+// StopCH9329Watcher 停止 CH9329 设备监控器
+func StopCH9329Watcher() {
+	if CH9329WatcherEnabled {
+		close(CH9329WatcherStopCh)
+		CH9329WatcherEnabled = false
+	}
 }

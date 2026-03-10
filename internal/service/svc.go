@@ -34,6 +34,10 @@ type SVC struct {
 	WOL                       wol.WOLInterface
 	RootPath                  string
 	Done                      chan struct{}
+	VideoPath                 string
+	VideoWidth                int
+	VideoHeight               int
+	VideoFPS                  uint32
 }
 
 func New(rootPath string, debug bool) {
@@ -44,6 +48,7 @@ func New(rootPath string, debug bool) {
 	Svc.initOTG()
 	// 初始化视频
 	Svc.initVideo()
+
 	// 初始化文件管理
 	Svc.initFilesManager(rootPath)
 	// 初始化ISO镜像管理
@@ -78,106 +83,230 @@ func (s *SVC) initOTG() {
 
 	hidMode := g.Cfg().MustGetWithCmd(s.CTX, `hidmode`, "otg").String()
 	udcName := g.Cfg().MustGetWithCmd(s.CTX, `udcname`, "opskvm").String()
-	Ch9329Path := g.Cfg().MustGetWithCmd(s.CTX, `ch9329path`, "/dev/ttyUSB0").String()
+	Ch9329Path := g.Cfg().MustGetWithCmd(s.CTX, `ch9329path`, "").String()
 
-	// 获取键盘和鼠标控制器
 	switch hidMode {
 	case "otg":
-		// 初始化USB Gadget服务
-		udcControllerName, err := otg.FindUDC()
-		if err != nil {
-			panic(err)
-		}
-		s.Gadget = otg.New(udcName, udcControllerName)
-		_, err = s.Gadget.InitConfig()
-		if err != nil {
-			panic(err)
-		}
+		go func() {
+			udcControllerName, err := otg.WaitForUDC(0, 2*time.Second)
+			if err != nil {
+				g.Log().Errorf(context.Background(), "Failed to wait for UDC: %v", err)
+				return
+			}
 
-		// 初始化键盘和鼠标
-		km := otg.NewKM(s.Gadget)
-		if err := km.AddKeyboard(); err != nil {
-			panic(err)
-		}
-		// 鼠标绝对模式（先创建，占用/dev/hidg1）
-		if err := km.AddMouse(true, false); err != nil {
-			panic(err)
-		}
-		// 鼠标相对模式（后创建，占用/dev/hidg2）
-		if err := km.AddMouse(false, false); err != nil {
-			panic(err)
-		}
+			s.Gadget = otg.New(udcName, udcControllerName)
+			_, err = s.Gadget.InitConfig()
+			if err != nil {
+				g.Log().Errorf(context.Background(), "Failed to init gadget: %v", err)
+				return
+			}
 
-		// 添加大CD/DVD服务
-		s.MSD = otg.NewMSD(s.Gadget)
-		if err := s.MSD.AddMSD(); err != nil {
-			panic(err)
-		}
+			km := otg.NewKM(s.Gadget)
+			if err := km.AddKeyboard(); err != nil {
+				g.Log().Errorf(context.Background(), "Failed to add keyboard: %v", err)
+				return
+			}
+			if err := km.AddMouse(true, false); err != nil {
+				g.Log().Errorf(context.Background(), "Failed to add absolute mouse: %v", err)
+				return
+			}
+			if err := km.AddMouse(false, false); err != nil {
+				g.Log().Errorf(context.Background(), "Failed to add relative mouse: %v", err)
+				return
+			}
 
-		// 启动USB Gadget服务
-		err = s.Gadget.StartUDC()
-		if err != nil {
-			panic(err)
-		}
+			s.MSD = otg.NewMSD(s.Gadget)
+			if err := s.MSD.AddMSD(); err != nil {
+				g.Log().Errorf(context.Background(), "Failed to add MSD: %v", err)
+				return
+			}
 
-		s.HID = otg.NewOTGKMHIDController()
-		s.HID.SetAbsoluteMouse(true)
-		if err := s.HID.Open(); err != nil {
-			g.Log().Errorf(context.Background(), "Failed to open OTG HID: %v", err)
-		}
+			err = s.Gadget.StartUDC()
+			if err != nil {
+				g.Log().Errorf(context.Background(), "Failed to start UDC: %v", err)
+				return
+			}
+
+			s.HID = otg.NewOTGKMHIDController()
+			s.HID.SetAbsoluteMouse(true)
+			if err := s.HID.Open(); err != nil {
+				g.Log().Errorf(context.Background(), "Failed to open OTG HID: %v", err)
+				return
+			}
+
+			g.Log().Info(context.Background(), "OTG device initialized successfully")
+
+			otg.StartUDCWatcher(udcControllerName, func() {
+				g.Log().Warning(context.Background(), "UDC device lost, stopping HID...")
+				s.HID.Close()
+				s.Gadget.CloseUDC()
+			}, func() {
+				g.Log().Info(context.Background(), "UDC device reconnected, reinitializing...")
+				time.Sleep(2 * time.Second)
+				_, err := s.Gadget.InitConfig()
+				if err != nil {
+					g.Log().Errorf(context.Background(), "Failed to reinitialize gadget: %v", err)
+					return
+				}
+				km := otg.NewKM(s.Gadget)
+				if err := km.AddKeyboard(); err != nil {
+					g.Log().Errorf(context.Background(), "Failed to re-add keyboard: %v", err)
+					return
+				}
+				if err := km.AddMouse(true, false); err != nil {
+					g.Log().Errorf(context.Background(), "Failed to re-add absolute mouse: %v", err)
+					return
+				}
+				if err := km.AddMouse(false, false); err != nil {
+					g.Log().Errorf(context.Background(), "Failed to re-add relative mouse: %v", err)
+					return
+				}
+				if err := s.MSD.AddMSD(); err != nil {
+					g.Log().Errorf(context.Background(), "Failed to re-add MSD: %v", err)
+					return
+				}
+				if err := s.Gadget.StartUDC(); err != nil {
+					g.Log().Errorf(context.Background(), "Failed to restart UDC: %v", err)
+					return
+				}
+				if err := s.HID.Open(); err != nil {
+					g.Log().Errorf(context.Background(), "Failed to reopen HID: %v", err)
+					return
+				}
+				g.Log().Info(context.Background(), "UDC device reinitialized successfully")
+			})
+		}()
 	case "ch9329":
-		s.HID = ch9329.NewCH9329(Ch9329Path)
-		s.HID.SetAbsoluteMouse(true)
-		if err := s.HID.Open(); err != nil {
-			g.Log().Errorf(context.Background(), "Failed to open CH9329: %v", err)
-		}
+		go func() {
+			actualDevicePath, err := ch9329.WaitForCH9329(Ch9329Path, 0, 2*time.Second)
+			if err != nil {
+				g.Log().Errorf(context.Background(), "Failed to wait for CH9329: %v", err)
+				return
+			}
+			s.HID = ch9329.NewCH9329(actualDevicePath)
+			s.HID.SetAbsoluteMouse(true)
+			if err := s.HID.Open(); err != nil {
+				g.Log().Errorf(context.Background(), "Failed to open CH9329: %v", err)
+				return
+			}
+
+			g.Log().Info(context.Background(), "CH9329 device initialized successfully")
+
+			ch9329.StartCH9329Watcher(actualDevicePath, func() {
+				g.Log().Warning(context.Background(), "CH9329 device lost, closing...")
+				s.HID.Close()
+			}, func(newDevicePath string) {
+				g.Log().Info(context.Background(), "CH9329 device reconnected: %s, reinitializing...", newDevicePath)
+				s.HID = ch9329.NewCH9329(newDevicePath)
+				s.HID.SetAbsoluteMouse(true)
+				time.Sleep(2 * time.Second)
+				if err := s.HID.Open(); err != nil {
+					g.Log().Errorf(context.Background(), "Failed to reopen CH9329: %v", err)
+					return
+				}
+				g.Log().Info(context.Background(), "CH9329 device reinitialized successfully")
+			})
+		}()
 	}
 }
 
 // 初始化视频服务
 func (s *SVC) initVideo() {
-	VideoPath := g.Cfg().MustGetWithCmd(s.CTX, `videopath`, "").String()
-	VideoWidth := g.Cfg().MustGetWithCmd(s.CTX, `videowidth`, "1920").Int()
-	VideoHeight := g.Cfg().MustGetWithCmd(s.CTX, `videoheight`, "1080").Int()
-	VideoFPS := g.Cfg().MustGetWithCmd(s.CTX, `videofps`, "30").Uint32()
+	s.VideoPath = g.Cfg().MustGetWithCmd(s.CTX, `videopath`, "").String()
+	s.VideoWidth = g.Cfg().MustGetWithCmd(s.CTX, `videowidth`, "1920").Int()
+	s.VideoHeight = g.Cfg().MustGetWithCmd(s.CTX, `videoheight`, "1080").Int()
+	s.VideoFPS = g.Cfg().MustGetWithCmd(s.CTX, `videofps`, "30").Uint32()
 
-	camera := video.NewV4LCamera()
-	if err := camera.Open(VideoPath); err != nil {
-		panic(err)
-	}
-	if err := camera.ApplyConfig(VideoWidth, VideoHeight, VideoFPS); err != nil {
-		g.Log().Warningf(context.Background(), "Failed to apply camera config: %v, using device default", err)
-	}
-	s.Camera = camera
-
-	// 初始化流分发器
-	s.Streamer = video.NewMJPEGStreamer(VideoWidth, VideoHeight)
-
-	// 启动帧采集goroutine
 	go func() {
-		for {
-			if s.Streamer.IsStopped() {
-				break
-			}
+		actualVideoPath, err := video.WaitForCamera(s.VideoPath, 30*time.Second, 2*time.Second)
+		if err != nil {
+			g.Log().Warningf(context.Background(), "No camera found in 30s, will retry later: %v", err)
+		} else {
+			s.VideoPath = actualVideoPath
 
-			// 检查摄像头状态，如果关闭则暂停采集
-			if !s.Camera.GetStatus() {
-				time.Sleep(500 * time.Millisecond) // 等待500ms后再次检查
-				continue
-			}
+			camera := video.NewV4LCamera()
+			if err := camera.Open(actualVideoPath); err != nil {
+				g.Log().Errorf(context.Background(), "Failed to open camera: %v", err)
+			} else {
+				s.Camera = camera
 
-			frame, err := s.Camera.Capture()
-			if err != nil {
-				g.Log().Errorf(context.Background(), "Capture error: %v", err)
-				time.Sleep(100 * time.Millisecond)
-				continue
+				s.Streamer = video.NewMJPEGStreamer(s.VideoWidth, s.VideoHeight)
+
+				g.Log().Info(context.Background(), "Camera initialized successfully")
+
+				go func() {
+					for {
+						if s.Streamer.IsStopped() {
+							break
+						}
+
+						if s.Camera == nil {
+							time.Sleep(500 * time.Millisecond)
+							continue
+						}
+
+						if !s.Camera.GetStatus() {
+							time.Sleep(500 * time.Millisecond)
+							continue
+						}
+
+						frame, err := s.Camera.Capture()
+						if err != nil {
+							time.Sleep(100 * time.Millisecond)
+							continue
+						}
+						if len(frame) < 5 {
+							continue
+						}
+						s.Streamer.Broadcast(frame)
+					}
+				}()
 			}
-			if len(frame) < 5 {
-				continue
-			}
-			// 广播JPEG帧
-			s.Streamer.Broadcast(frame)
 		}
+
+		video.StartCameraWatcher(func() {
+			g.Log().Warning(context.Background(), "Camera device lost, stopping streamer...")
+			s.Streamer.Stop()
+			s.Camera.Close()
+		}, func(newDevicePath string) {
+			g.Log().Info(context.Background(), "Camera device reconnected: %s, reinitializing...", newDevicePath)
+			s.VideoPath = newDevicePath
+			time.Sleep(2 * time.Second)
+			camera := video.NewV4LCamera()
+			if err := camera.Open(newDevicePath); err != nil {
+				g.Log().Errorf(context.Background(), "Failed to reopen camera: %v", err)
+				return
+			}
+			s.Camera = camera
+			s.Streamer = video.NewMJPEGStreamer(s.VideoWidth, s.VideoHeight)
+
+			go func() {
+				for {
+					if s.Streamer.IsStopped() {
+						break
+					}
+					if s.Camera == nil {
+						time.Sleep(500 * time.Millisecond)
+						continue
+					}
+					if !s.Camera.GetStatus() {
+						time.Sleep(500 * time.Millisecond)
+						continue
+					}
+					frame, err := s.Camera.Capture()
+					if err != nil {
+						time.Sleep(100 * time.Millisecond)
+						continue
+					}
+					if len(frame) < 5 {
+						continue
+					}
+					s.Streamer.Broadcast(frame)
+				}
+			}()
+
+			g.Log().Info(context.Background(), "Camera device reinitialized successfully")
+		})
 	}()
 }
 
@@ -188,14 +317,38 @@ func (s *SVC) handleInterrupt(camera video.Camera, streamer video.Streamer, gadg
 	<-ch
 
 	g.Log().Info(context.Background(), "Stopping server...")
+
+	g.Log().Info(context.Background(), "Stopping OTG watcher...")
+	otg.StopUDCWatcher()
+	g.Log().Info(context.Background(), "OTG watcher stopped")
+
+	g.Log().Info(context.Background(), "Stopping CH9329 watcher...")
+	ch9329.StopCH9329Watcher()
+	g.Log().Info(context.Background(), "CH9329 watcher stopped")
+
+	g.Log().Info(context.Background(), "Stopping camera watcher...")
+	video.StopCameraWatcher()
+	g.Log().Info(context.Background(), "Camera watcher stopped")
+
 	if gadget != nil {
+		g.Log().Info(context.Background(), "Removing gadget...")
 		if err := gadget.Remove(); err != nil {
 			g.Log().Errorf(context.Background(), "Error removing Gadget: %v", err)
 		}
 	}
-	streamer.Stop()
-	camera.Close()
-	streamer.Wait()
+
+	if camera != nil {
+		go func() {
+			camera.Close()
+		}()
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if streamer != nil {
+		g.Log().Info(context.Background(), "Stopping streamer...")
+		streamer.Stop()
+		g.Log().Info(context.Background(), "Streamer stopped")
+	}
 
 	g.Log().Info(context.Background(), "All cleanup operations completed, exiting...")
 	close(done)

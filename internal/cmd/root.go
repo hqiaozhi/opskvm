@@ -52,8 +52,8 @@ type CIintInput struct {
 	// OTG和鼠键配置
 	hidMode     string `short:"" name:"hidmode" default:"otg" brief:"hid mode otg/ch9329"`
 	UdcName     string `short:"" name:"udcname" default:"opskvm" brief:"udc name"`
-	Ch9329Path  string `short:"" name:"ch9329path" default:"/dev/ttyUSB0" brief:"ch9329 path"`
-	VideoPath   string `short:"" name:"videopath" default:"auto" brief:"video path"`
+	Ch9329Path  string `short:"" name:"ch9329path" default:"" brief:"ch9329 path, empty for auto detect"`
+	VideoPath   string `short:"" name:"videopath" default:"" brief:"video path, empty for auto detect"`
 	VideoWidth  int    `short:"" name:"videowidth" default:"1920" brief:"video width"`
 	VideoHeight int    `short:"" name:"videoheight" default:"1080" brief:"video height"`
 	VideoFPS    uint32 `short:"" name:"videofps" default:"30" brief:"video fps"`
