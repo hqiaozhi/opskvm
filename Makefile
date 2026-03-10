@@ -20,14 +20,16 @@ dep:
 
 gf: pack dep rmbin
 	@mkdir -p bin/gf
-	@GOOS=linux GOARCH=amd64  gf build -ew -o  bin/gf/opskvm-linux-amd64-${VERSION} main.go
-	@GOOS=linux GOARCH=arm64  gf build -ew -o  bin/gf/opskvm-linux-arm64-${VERSION} main.go
+	@GOOS=linux GOARCH=amd64 gf build -ew -o bin/gf/opskvm-linux-amd64-${VERSION} main.go
+	@GOOS=linux GOARCH=arm64 gf build -ew -o bin/gf/opskvm-linux-arm64-${VERSION} main.go
+	@GOOS=linux GOARCH=arm GOARM=7 gf build -ew -o bin/gf/opskvm-linux-armv7-${VERSION} main.go
 	@chmod +x -R bin/gf/*
 
-go: pack dep rmbin
+go: dep rmbin
 	@mkdir -p bin/go
-	GOOS=linux GOARCH=amd64  go build -ldflags "-s -w" -o  bin/go/opskvm-linux-amd64-${VERSION} main.go
-	GOOS=linux GOARCH=arm64  go build -ldflags "-s -w" -o  bin/go/opskvm-linux-arm64-${VERSION} main.go
+	GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o bin/go/opskvm-linux-amd64-${VERSION} main.go
+	GOOS=linux GOARCH=arm64 go build -ldflags "-s -w" -o bin/go/opskvm-linux-arm64-${VERSION} main.go
+	GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "-s -w" -o bin/go/opskvm-linux-armv7-${VERSION} main.go
 	@chmod +x -R bin/go/*
 
 install:

@@ -1,8 +1,213 @@
-# GoFrame Template For SingleRepo
+# OPSKVM
 
-Quick Start: 
-- https://goframe.org/quick
+OPSKVM 是一个基于 Web 的 KVM (Keyboard-Video-Mouse) 远程管理系统，支持视频流传输、键盘鼠标控制、文件管理、远程唤醒等功能。
 
+## 功能特性
 
-## 
-github.com/korandiz/v4l 库不支持windows，所以程序不支持构建windows版本。
+### KVM 控制
+- 视频流传输：通过 WebSocket 实时获取摄像头视频流
+- 键盘控制：支持通过 Web 远程发送键盘按键
+- 鼠标控制：支持鼠标模式切换和坐标传输
+- 配置管理：支持视频分辨率、帧率、压缩参数配置
+
+### 用户管理
+- 用户注册与登录
+- 密码修改
+- 用户信息管理
+- TOTP 双因素认证支持
+- JWT token 认证
+
+### 文件管理
+- 文件浏览与列表
+- 文件上传（支持分片上传）
+- 文件下载
+- 目录创建
+- 外接设备挂载（USB 设备）
+
+### 镜像管理
+- 镜像文件上传与管理
+- 分片上传支持
+- URL 远程下载
+- 存储空间管理
+
+### 远程唤醒 (Wake-on-LAN)
+- WoL 配置管理
+- 远程唤醒设备
+- MAC 地址管理
+
+### WebShell 终端
+- WebSocket SSH 终端
+- 终端大小调整
+- 多会话支持
+
+### 系统功能
+- 系统信息查询
+- 网络速度监控
+- 系统重启
+
+## 技术栈
+
+- **后端框架**: GoFrame v2
+- **数据库**: SQLite
+- **Web 服务器**: GoFrame ghttp
+- **WebSocket**: gorilla/websocket
+- **视频捕获**: github.com/korandiz/v4l
+- **串口通信**: go.bug.st/serial
+- **系统信息**: github.com/shirou/gopsutil
+- **JWT**: github.com/golang-jwt/jwt
+- **TOTP**: github.com/pquerna/otp
+
+## 构建说明
+
+### 环境要求
+
+- Go 1.25+
+- Linux (仅支持 Linux，不支持 Windows)
+
+### 构建命令
+
+```bash
+# 使用 Go 构建
+make go
+
+# 使用 GoFrame CLI 构建
+make gf
+```
+
+构建产物位于 `bin/` 目录下：
+- `opskvm-linux-amd64-v0.0.3`
+- `opskvm-linux-arm64-v0.0.3`
+
+### 安装
+
+```bash
+# 安装到系统
+make install
+```
+
+或手动安装：
+```bash
+install -m 755 bin/go/opskvm-linux-arm64-v0.0.3 /usr/local/bin/opskvm
+```
+
+## 运行说明
+
+### 快速启动
+
+```bash
+# 默认配置启动
+./opskvm
+```
+
+### 命令行参数
+
+| 参数 | 简写 | 默认值 | 说明 |
+|------|------|--------|------|
+| --host | -H | 0.0.0.0 | 服务器监听地址 |
+| --port | -P | 8080 | 服务器端口 |
+| --username | -u | admin | 登录用户名 |
+| --password | -p | admin123 | 登录密码 |
+| --debug | -d | false | 调试模式 |
+| --rootpath | -D | /data/opskvm/ | 数据存储路径 |
+| --ssl | -S | true | 启用 HTTPS |
+| --swagger | | false | 启用 Swagger 文档 |
+| --cors | | false | 启用 CORS |
+| --secretkey | -s | (随机) | JWT 密钥 |
+| --expire | -e | 2h | JWT 过期时间 |
+| --hidmode | | otg | HID 模式 (otg/ch9329) |
+| --videopath | | 自动检测 | 视频设备路径 |
+| --videowidth | | 1920 | 视频宽度 |
+| --videoheight | | 1080 | 视频高度 |
+| --videofps | | 30 | 视频帧率 |
+| --list | -l | | 列出视频设备 |
+| --loglevel | | info | 日志级别 |
+| --version | -v | | 显示版本 |
+
+### 服务模式
+
+```bash
+# 安装为系统服务
+opskvm install
+
+# 卸载系统服务
+opskvm uninstall
+```
+
+### Docker 部署
+
+```bash
+# 构建 Docker 镜像
+cd manifest/docker
+./docker.sh
+```
+
+## 目录结构
+
+```
+opskvm/
+├── api/                    # API 接口定义
+│   ├── files/             # 文件管理 API
+│   ├── kvm/               # KVM 控制 API
+│   ├── mirrors/          # 镜像管理 API
+│   ├── system/           # 系统 API
+│   ├── totp/             # TOTP API
+│   ├── users/            # 用户管理 API
+│   ├── wake/             # WoL API
+│   └── webshell/         # WebShell API
+├── bin/                   # 编译产物
+├── hack/                  # 构建配置
+├── internal/              # 内部实现
+│   ├── cmd/              # 命令行入口
+│   ├── config/           # 配置管理
+│   ├── controller/       # 控制器
+│   ├── dao/              # 数据访问层
+│   ├── logic/            # 业务逻辑
+│   ├── model/            # 数据模型
+│   └── service/          # 服务层
+│       ├── files/        # 文件服务
+│       ├── hid/          # HID 服务
+│       ├── mirrors/      # 镜像服务
+│       ├── sqlite/       # 数据库服务
+│       ├── video/        # 视频服务
+│       └── wol/          # WoL 服务
+├── manifest/              # 部署清单
+│   └── docker/           # Docker 配置
+└── resource/              # 静态资源
+```
+
+## API 路由
+
+| 路径 | 方法 | 说明 |
+|------|------|------|
+| /api/v1/kvm | GET | KVM 视频流 (WebSocket) |
+| /api/v1/kvm/session | POST | 创建 KVM 会话 |
+| /api/v1/kvm/on | POST | 开启摄像头 |
+| /api/v1/kvm/off | POST | 关闭摄像头 |
+| /api/v1/kvm/config | GET/PUT | KVM 配置 |
+| /api/v1/users/login | POST | 用户登录 |
+| /api/v1/users/register | POST | 用户注册 |
+| /api/v1/users | GET/DELETE | 用户管理 |
+| /api/v1/files | GET | 文件列表 |
+| /api/v1/files | POST | 文件上传 |
+| /api/v1/files/devices | GET | 外接设备列表 |
+| /api/v1/files/mount | POST | 设备挂载 |
+| /api/v1/mirrors | GET | 镜像列表 |
+| /api/v1/mirrors | POST | 镜像上传 |
+| /api/v1/wol | GET | WoL 列表 |
+| /api/v1/wol | POST | 创建 WoL 配置 |
+| /api/v1/wol/wake | POST | 唤醒设备 |
+| /api/v1/shell | GET | WebShell (WebSocket) |
+| /api/v1/system/info | GET | 系统信息 |
+| /api/v1/system/restart | POST | 系统重启 |
+| /api/v1/totp/setup | POST | TOTP 设置 |
+| /api/v1/totp/verify | POST | TOTP 验证 |
+
+## 注意事项
+
+- 本项目依赖 `github.com/korandiz/v4l` 库，该库仅支持 Linux 系统，因此程序不支持 Windows 版本
+- 需要 root 权限运行以访问视频设备和 HID 设备
+- 默认 HTTPS 已启用，使用自签名证书
+
+## 许可证
+
+MIT License
