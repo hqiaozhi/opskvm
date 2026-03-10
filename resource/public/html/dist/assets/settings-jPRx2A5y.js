@@ -1,1 +1,0 @@
-import{Ot as e,S as t,Tt as n,ht as r,vt as i}from"./index-D1XqdgJW.js";var a={},o={class:`settings-content`};function s(t,a){let s=e(`RouterView`);return n(),r(`div`,o,[i(s)])}var c=t(a,[[`render`,s],[`__scopeId`,`data-v-c134aab9`]]);export{c as default};

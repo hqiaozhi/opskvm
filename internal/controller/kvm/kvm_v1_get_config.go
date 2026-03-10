@@ -9,6 +9,11 @@ import (
 )
 
 func (c *ControllerV1) GetConfig(ctx context.Context, req *v1.GetConfigReq) (res *v1.GetConfigRes, err error) {
+	// 检查摄像头是否可用
+	if c.kvm.SVC.Camera == nil {
+		return nil, gerror.New("Camera device not available")
+	}
+
 	cfg, err := c.kvm.SVC.Camera.GetConfig()
 	if err != nil {
 		return nil, gerror.Newf("Failed to get config: %v", err)

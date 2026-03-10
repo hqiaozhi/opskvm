@@ -10,6 +10,14 @@ import (
 )
 
 func (c *ControllerV1) UpdateConfig(ctx context.Context, req *v1.UpdateConfigReq) (res *v1.UpdateConfigRes, err error) {
+	// 检查设备是否可用
+	if c.kvm.SVC.Camera == nil {
+		return nil, gerror.New("Camera device not available")
+	}
+	if c.kvm.SVC.Streamer == nil {
+		return nil, gerror.New("Streamer not available")
+	}
+
 	// 暂停流分发，避免配置更新冲突（延长暂停时间，适配设备重启）
 	c.kvm.SVC.Streamer.Pause()
 	defer func() {

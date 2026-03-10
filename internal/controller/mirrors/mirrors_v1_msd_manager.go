@@ -10,6 +10,10 @@ import (
 )
 
 func (c *ControllerV1) MsdManager(ctx context.Context, req *v1.MsdManagerReq) (res *v1.MsdManagerRes, err error) {
+	if c.mirrors.SVC.MSD == nil {
+		return nil, gerror.New("MSD device not available")
+	}
+
 	// 挂载模式: 0(Flash)/1(CD/DVD)/2(取消挂载)
 	switch req.Mode {
 	case "0":

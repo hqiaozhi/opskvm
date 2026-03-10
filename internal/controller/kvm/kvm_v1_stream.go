@@ -10,6 +10,7 @@ import (
 	v1 "opskvm/api/kvm/v1"
 	"opskvm/internal/service/video"
 
+	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
 	"github.com/gorilla/websocket"
@@ -88,6 +89,16 @@ func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.S
 	sessionsLock.Lock()
 	delete(sessions, sessionId)
 	sessionsLock.Unlock()
+
+	// 检查设备是否可用
+	if c.kvm.SVC.Camera == nil {
+		g.Log().Errorf(ctx, "Camera device not available")
+		return nil, gerror.New("Camera device not available")
+	}
+	if c.kvm.SVC.Streamer == nil {
+		g.Log().Errorf(ctx, "Streamer not available")
+		return nil, gerror.New("Streamer not available")
+	}
 
 	// 连接的时候打开摄像头
 	err = c.kvm.SVC.Camera.TurnOn()
@@ -230,6 +241,12 @@ func (c *ControllerV1) handleWSMessage(ctx context.Context, clt *video.Client, m
 		// 记录键盘事件
 		g.Log().Debugf(ctx, "Keyboard event: modifier=0x%02x, keys=%v", keyboardData.Modifier, keyboardData.Keys)
 
+		// 检查 HID 设备是否可用
+		if c.kvm.SVC.HID == nil {
+			g.Log().Errorf(ctx, "HID device not available, cannot send keyboard report")
+			return
+		}
+
 		// 直接使用接收到的按键码发送报告
 		c.kvm.SVC.HID.SendKeyboardReport(keyboardData.Modifier, keyboardData.Keys)
 
@@ -263,6 +280,10 @@ func (c *ControllerV1) handleWSMessage(ctx context.Context, clt *video.Client, m
 		}
 
 		// 记录当前鼠标模式
+		if c.kvm.SVC.HID == nil {
+			g.Log().Errorf(ctx, "HID device not available, cannot process mouse event")
+			return
+		}
 		absolute := c.kvm.SVC.HID.IsAbsoluteMouse()
 		g.Log().Debugf(ctx, "WS Mouse Data - Type: %d, Mode: %v, Data: %+v", wsMsg.Type, absolute, mouseData)
 
@@ -300,6 +321,10 @@ func (c *ControllerV1) handleWSMessage(ctx context.Context, clt *video.Client, m
 		}
 
 		g.Log().Infof(ctx, "Mouse mode change: absolute=%v", mouseModeData.Absolute)
+		if c.kvm.SVC.HID == nil {
+			g.Log().Errorf(ctx, "HID device not available, cannot set mouse mode")
+			return
+		}
 		c.kvm.SVC.HID.SetAbsoluteMouse(mouseModeData.Absolute)
 	case WSMessageTypeVideo:
 		// 视频流数据，这里不需要处理，因为视频流是从服务器发送到客户端的
