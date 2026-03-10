@@ -101,27 +101,43 @@ install -m 755 bin/go/opskvm-linux-arm64-v0.0.3 /usr/local/bin/opskvm
 
 ### 命令行参数
 
-| 参数 | 简写 | 默认值 | 说明 |
-|------|------|--------|------|
-| --host | -H | 0.0.0.0 | 服务器监听地址 |
-| --port | -P | 8080 | 服务器端口 |
-| --username | -u | admin | 登录用户名 |
-| --password | -p | admin123 | 登录密码 |
-| --debug | -d | false | 调试模式 |
-| --rootpath | -D | /data/opskvm/ | 数据存储路径 |
-| --ssl | -S | true | 启用 HTTPS |
-| --swagger | | false | 启用 Swagger 文档 |
-| --cors | | false | 启用 CORS |
-| --secretkey | -s | (随机) | JWT 密钥 |
-| --expire | -e | 2h | JWT 过期时间 |
-| --hidmode | | otg | HID 模式 (otg/ch9329) |
-| --videopath | | 自动检测 | 视频设备路径 |
-| --videowidth | | 1920 | 视频宽度 |
-| --videoheight | | 1080 | 视频高度 |
-| --videofps | | 30 | 视频帧率 |
-| --list | -l | | 列出视频设备 |
-| --loglevel | | info | 日志级别 |
-| --version | -v | | 显示版本 |
+```
+USAGE 
+     opskvm COMMAND [OPTION] 
+ 
+ COMMAND 
+     install      install to system (need root permission) 
+     uninstall    uninstall from system (need root permission) 
+ 
+ OPTION 
+     -H, --host            server host (default: "0.0.0.0") 
+     -P, --port            port of http server (default: "8080") 
+     -u, --username        login username (default: "admin") 
+     -p, --password        login password (default: "admin123") 
+     -d, --debug           debug mode,default false (true/false) 
+     -D, --rootpath        root path (save data) (default: "/data/opskvm/") 
+     -/--enroll            defaut false (true/false) 
+     -S, --ssl             defaut true (true/false) 
+     -/--swagger           defaut false (true/false) 
+     -/--cors              defaut false (true/false) 
+     -s, --secretkey       jwt secret key (default: "hv4cW0kHLoigQcmVlHACmOIwVFaIQhd0qIf7SXgy4sffFRcmere85VKZrtbuMcH9") 
+     -i, --issuer          jwt issuer (default: "opskvm") 
+     -a, --audience        jwt audience (default: "opskvm") 
+     -e, --expire          jwt expire hours (default: "2") 
+     -r, --refresh         jwt refresh hours (default: "12") 
+     -m, --signingmethod   jwt signing method (default: "HS256") 
+     -/--hidmode           hid mode otg/ch9329 (default: "otg") 
+     -/--udcname           udc name (default: "opskvm") 
+     -/--ch9329path        ch9329 path, empty for auto detect 
+     -/--videopath         video path, empty for auto detect 
+     -/--videowidth        video width (default: "1920") 
+     -/--videoheight       video height (default: "1080") 
+     -/--videofps          video fps (default: "30") 
+     -l, --list            find video device 
+     -/--loglevel          set log level (default: "info") 
+     -v, --version         show version information of current binary 
+     -h, --help            more information about this command
+```
 
 ### 服务模式
 

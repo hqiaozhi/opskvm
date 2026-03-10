@@ -38,11 +38,13 @@ type SVC struct {
 	VideoWidth                int
 	VideoHeight               int
 	VideoFPS                  uint32
+	Version                   string
 }
 
-func New(rootPath string, debug bool) {
+func New(rootPath string, debug bool, version string) {
 	Svc = &SVC{}
 	Svc.RootPath = rootPath
+	Svc.Version = version
 
 	// 初始化OTG
 	Svc.initOTG()

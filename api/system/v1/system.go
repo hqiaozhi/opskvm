@@ -11,6 +11,7 @@ type SysInfoReq struct {
 	g.Meta `path:"system/sysinfo" method:"get" sm:"获取系统信息" tags:"系统管理"`
 }
 type SysInfoRes struct {
+	Version  string `json:"version" dc:"程序版本"`
 	Hostname string `json:"hostname" dc:"主机名称"`
 	Distro   string `json:"distro" dc:"发行版本"`
 	Kernel   string `json:"kernel" dc:"内核版本"`

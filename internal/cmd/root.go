@@ -77,7 +77,7 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 	}
 
 	// 初始化Service
-	service.New(in.RootPath, in.Debug)
+	service.New(in.RootPath, in.Debug, VersionString)
 
 	s := g.Server()
 	if !in.Ssl {

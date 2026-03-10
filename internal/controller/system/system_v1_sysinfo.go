@@ -12,6 +12,7 @@ func (c *ControllerV1) SysInfo(ctx context.Context, req *v1.SysInfoReq) (res *v1
 		return nil, err
 	}
 	return &v1.SysInfoRes{
+		Version:  info.Version,
 		Hostname: info.Hostname,
 		Distro:   info.Distro,
 		Kernel:   info.Kernel,

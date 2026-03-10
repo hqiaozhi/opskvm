@@ -16,6 +16,7 @@ import (
 )
 
 type SystemInfo struct {
+	Version  string
 	Hostname string
 	Distro   string
 	Kernel   string
@@ -28,6 +29,8 @@ type SystemInfo struct {
 
 func (s *System) SysInfo(ctx context.Context) (*SystemInfo, error) {
 	info := &SystemInfo{}
+
+	info.Version = s.SVC.Version
 
 	hostname, err := os.Hostname()
 	if err != nil {
