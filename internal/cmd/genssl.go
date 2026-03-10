@@ -38,8 +38,11 @@ func NewSSLGenerator() SSLGenerator {
 func (g *selfSignedSSLGenerator) Generate(ctx context.Context, outputDir string, commonName string, dnsNames []string, ipAddresses []string) error {
 	certFile := filepath.Join(outputDir, "server.crt")
 	keyFile := filepath.Join(outputDir, "server.key")
-	os.Remove(certFile)
-	os.Remove(keyFile)
+
+	if _, err := os.Stat(certFile); err == nil {
+		gLog.Log().Infof(ctx, "SSL certificate already exists, skipping generation: %s", certFile)
+		return nil
+	}
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
