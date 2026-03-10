@@ -117,6 +117,9 @@ func (l *SysAllLogic) SysAll(ctx context.Context) (*v1.SysAllRes, error) {
 	if err == nil {
 		res.DiskData = make([]v1.DiskInfo, 0)
 		for _, part := range diskParts {
+			if strings.HasPrefix(part.Device, "/dev/loop") {
+				continue
+			}
 			diskUsage, err := disk.Usage(part.Mountpoint)
 			if err == nil {
 				diskInfo := v1.DiskInfo{
