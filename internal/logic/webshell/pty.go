@@ -33,8 +33,6 @@ func (p *Pty) Start() {
 		"TERM=xterm-256color",
 		"HOME=/root",
 		"USER=root",
-		"LANG=zh_CN.UTF-8",
-		"LC_ALL=zh_CN.UTF-8",
 	}
 
 	ptmx, err := pty.Start(cmd)

@@ -1,1 +1,0 @@
-import{At as e,Et as t,S as n,gt as r,yt as i}from"./index-CiYeWylo.js";var a={},o={class:`settings-content`};function s(n,a){let s=e(`RouterView`);return t(),r(`div`,o,[i(s)])}var c=n(a,[[`render`,s],[`__scopeId`,`data-v-c134aab9`]]);export{c as default};

@@ -1,1 +1,0 @@
-import{Et as e,bt as t,gt as n,pt as r,x as i}from"./index-CiYeWylo.js";var a={style:{"text-align":`center`,"margin-top":`100px`}},o=t({__name:`403Page`,setup(t){let o=i(),s=()=>o.push(`/`);return(t,i)=>(e(),n(`div`,a,[i[0]||=r(`h1`,null,`403 无权限访问`,-1),i[1]||=r(`p`,null,`你没有权限访问该页面，请联系管理员`,-1),r(`button`,{onClick:s},`返回首页`)]))}});export{o as default};

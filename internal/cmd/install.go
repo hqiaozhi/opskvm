@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/coreos/go-systemd/v22/unit"
 	"github.com/gogf/gf/v2/frame/g"
@@ -19,6 +20,7 @@ type install struct {
 type installInput struct {
 	g.Meta `name:"install"`
 }
+
 type InstallOutput struct{}
 
 func (i install) Index(ctx context.Context, in installInput) (out *InstallOutput, err error) {
@@ -36,9 +38,20 @@ func (i install) Index(ctx context.Context, in installInput) (out *InstallOutput
 		os.Exit(1)
 	}
 
+	
+	
+	// 服务文件路径
+	servicePath := "/lib/systemd/system/opskvm.service"
+	if _, err := os.Stat(servicePath); err == nil {
+		
+		os.RemoveAll(servicePath)
+	}
+	
 	// 目标安装路径
 	targetExecPath := "/usr/local/bin/opskvm"
-
+	if _, err := os.Stat(targetExecPath); err == nil {
+		os.RemoveAll(targetExecPath)
+	}
 	// 复制可执行文件到目标路径
 	g.Log().Infof(ctx, "Copying executable to %s...", targetExecPath)
 	currentContent, err := os.ReadFile(currentExecPath)
@@ -56,7 +69,7 @@ func (i install) Index(ctx context.Context, in installInput) (out *InstallOutput
 		{Section: "Unit", Name: "Description", Value: "opskvm service"},
 		{Section: "Unit", Name: "After", Value: "network.target"},
 		{Section: "Service", Name: "Type", Value: "simple"},
-		{Section: "Service", Name: "ExecStart", Value: fmt.Sprintf("%s", targetExecPath)},
+		{Section: "Service", Name: "ExecStart", Value: fmt.Sprintf("%s --hidmode %s", targetExecPath, detectHIDMode())},
 		{Section: "Service", Name: "Restart", Value: "on-failure"},
 		{Section: "Service", Name: "RestartSec", Value: "5"},
 		{Section: "Service", Name: "User", Value: "root"},
@@ -68,9 +81,6 @@ func (i install) Index(ctx context.Context, in installInput) (out *InstallOutput
 	for _, opt := range serviceContent {
 		serviceStr += fmt.Sprintf("[%s]\n%s=%s\n", opt.Section, opt.Name, opt.Value)
 	}
-
-	// 服务文件路径
-	servicePath := "/lib/systemd/system/opskvm.service"
 
 	// 写入服务文件
 	if err := os.WriteFile(servicePath, []byte(serviceStr), 0644); err != nil {
@@ -108,4 +118,31 @@ func (i install) Index(ctx context.Context, in installInput) (out *InstallOutput
 		g.Log().Warning(ctx, "Failed to get service status: ", err)
 	}
 	return
+}
+
+func detectHIDMode() string {
+	otgExists := false
+	ch9329Exists := false
+
+	udcList, err := filepath.Glob("/sys/class/udc/*")
+	if err == nil && len(udcList) > 0 {
+		otgExists = true
+	}
+
+	ch9329Matches, err := filepath.Glob("/dev/ttyUSB*")
+	if err == nil && len(ch9329Matches) > 0 {
+		ch9329Exists = true
+	}
+
+	if otgExists || ch9329Exists {
+		if !otgExists && ch9329Exists {
+			g.Log().Info(context.Background(), "Only CH9329 device found, using --hidmode ch9329")
+			return "ch9329"
+		}
+		g.Log().Info(context.Background(), "OTG device found or both devices exist, using --hidmode otg")
+		return "otg"
+	}
+
+	g.Log().Warning(context.Background(), "No HID device found, defaulting to --hidmode otg")
+	return "otg"
 }
