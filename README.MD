@@ -1,8 +1,16 @@
 # OPSKVM
 
 OPSKVM 是一个基于 Web 的 KVM (Keyboard-Video-Mouse) 远程管理系统，支持视频流传输、键盘鼠标控制、文件管理、远程唤醒等功能。
+![alt text](docs/image0.png)
+
+后端项目地址：https://github.com/hqiaozhi/opskvm
+前端项目地址：https://github.com/hqiaozhi/opskvm-vue3
 
 ## 功能特性
+
+### 内置前端
+- 内嵌前端
+- 一键启动
 
 ### KVM 控制
 - 视频流传输：通过 WebSocket 实时获取摄像头视频流
@@ -13,7 +21,7 @@ OPSKVM 是一个基于 Web 的 KVM (Keyboard-Video-Mouse) 远程管理系统，�
 ### 用户管理
 - 用户注册与登录
 - 密码修改
-- 用户信息管理
+- 用户信息管理（支持多用户）
 - TOTP 双因素认证支持
 - JWT token 认证
 
@@ -22,13 +30,14 @@ OPSKVM 是一个基于 Web 的 KVM (Keyboard-Video-Mouse) 远程管理系统，�
 - 文件上传（支持分片上传）
 - 文件下载
 - 目录创建
-- 外接设备挂载（USB 设备）
+- 设备挂载（USB设备、硬盘、分区可挂载到被控端）
 
 ### 镜像管理
-- 镜像文件上传与管理
-- 分片上传支持
+- 镜像iso、img格式管理
+- 分片上传支持、秒传支持
 - URL 远程下载
 - 存储空间管理
+- 挂载和卸载镜像
 
 ### 远程唤醒 (Wake-on-LAN)
 - WoL 配置管理
@@ -37,16 +46,15 @@ OPSKVM 是一个基于 Web 的 KVM (Keyboard-Video-Mouse) 远程管理系统，�
 
 ### WebShell 终端
 - WebSocket SSH 终端
-- 终端大小调整
-- 多会话支持
+- 内置多个快捷命令按钮
 
 ### 系统功能
-- 系统信息查询
+- 系统状态显示
 - 网络速度监控
 - 系统重启
+- 支持热插拔
 
 ## 技术栈
-
 - **后端框架**: GoFrame v2
 - **数据库**: SQLite
 - **Web 服务器**: GoFrame ghttp
@@ -74,20 +82,35 @@ make go
 make gf
 ```
 
-构建产物位于 `bin/` 目录下：
+构建产物位于 `bin/go`或`bin/gf` 目录下：
 - `opskvm-linux-amd64-v0.0.3`
 - `opskvm-linux-arm64-v0.0.3`
 
 ### 安装
-
+默认账户：admin
+默认密码：admin123
+（支持安装时指定账户和密码，也可以安装之后通过系统用户管理修改）
 ```bash
 # 安装到系统
-make install
-```
+./opskvm-linux-arm64-v0.0.3 install                                                                      <dev>
+2026-03-10T22:11:55.441+08:00 [INFO] {e421f1c345809b18932bfa7599a6605e} stop old opskvm service...
+2026-03-10T22:11:55.673+08:00 [INFO] {e421f1c345809b18932bfa7599a6605e} Copying executable to /usr/local/bin/opskvm...
+2026-03-10T22:11:55.858+08:00 [INFO] {e421f1c345809b18932bfa7599a6605e} OTG device found or both devices exist, using --hidmode otg
+2026-03-10T22:11:55.859+08:00 [INFO] {e421f1c345809b18932bfa7599a6605e} Systemd service file created at:  /lib/systemd/system/opskvm.service
+2026-03-10T22:11:57.687+08:00 [INFO] {e421f1c345809b18932bfa7599a6605e} Systemd daemon reloaded
+2026-03-10T22:11:59.184+08:00 [INFO] {e421f1c345809b18932bfa7599a6605e} opskvm service enabled
+2026-03-10T22:11:59.293+08:00 [INFO] {e421f1c345809b18932bfa7599a6605e} opskvm service started successfully
+● opskvm.service - opskvm service
+     Loaded: loaded (/lib/systemd/system/opskvm.service; enabled; preset: enabled)
+     Active: active (running) since Tue 2026-03-10 22:11:59 CST; 77ms ago
+   Main PID: 1003192 (opskvm)
+      Tasks: 7 (limit: 1743)
+     Memory: 3.3M
+        CPU: 68ms
+     CGroup: /system.slice/opskvm.service
+             └─1003192 /usr/local/bin/opskvm --hidmode otg
 
-或手动安装：
-```bash
-install -m 755 bin/go/opskvm-linux-arm64-v0.0.3 /usr/local/bin/opskvm
+3月 10 22:11:59 OneCloud-Pro-128G systemd[1]: Started opskvm.service - opskvm service.
 ```
 
 ## 运行说明
@@ -217,10 +240,15 @@ opskvm/
 | /api/v1/system/restart | POST | 系统重启 |
 | /api/v1/totp/setup | POST | TOTP 设置 |
 | /api/v1/totp/verify | POST | TOTP 验证 |
+......
+
+## 界面预览
+![alt text](docs/image0.png) ![alt text](docs/image1.png) ![alt text](docs/image2.png) ![alt text](docs/image3.png) ![alt text](docs/image4.png) ![alt text](docs/image5.png) ![alt text](docs/image6.png) ![alt text](docs/image7.png) ![alt text](docs/image8.png) ![alt text](docs/image9.png)
+
 
 ## 注意事项
 
-- 本项目依赖 `github.com/korandiz/v4l` 库，该库仅支持 Linux 系统，因此程序不支持 Windows 版本
+- 本项目依赖 `github.com/korandiz/v4l` 库，仅支持 Linux 系统
 - 需要 root 权限运行以访问视频设备和 HID 设备
 - 默认 HTTPS 已启用，使用自签名证书
 
