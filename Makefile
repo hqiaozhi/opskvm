@@ -18,7 +18,7 @@ pack:
 dep:
 	@go mod tidy
 
-gf: pack dep rmbin
+gf: dep rmbin
 	@mkdir -p bin/gf
 	@GOOS=linux GOARCH=amd64 gf build -ew -o bin/gf/opskvm-linux-amd64-${VERSION} main.go
 	@GOOS=linux GOARCH=arm64 gf build -ew -o bin/gf/opskvm-linux-arm64-${VERSION} main.go
