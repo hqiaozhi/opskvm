@@ -2,6 +2,7 @@ package otg
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 )
@@ -63,9 +64,11 @@ func (k *KM) addHID(desc string, hid HID) error {
 	}
 
 	// 写入HID配置
-	err = k.Write(filepath.Join(funcPath, "no_out_endpoint"), "1")
-	if err != nil {
-		return err
+	if _, err := os.Stat(filepath.Join(funcPath, "no_out_endpoint")); err == nil {
+		err = k.Write(filepath.Join(funcPath, "no_out_endpoint"), "1")
+		if err != nil {
+			return err
+		}
 	}
 
 	err = k.Write(filepath.Join(funcPath, "protocol"), strconv.Itoa(hid.Protocol))
