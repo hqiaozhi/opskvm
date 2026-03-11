@@ -176,7 +176,7 @@ opskvm uninstall
 ### Docker 部署
 
 ```bash
-# 构建 Docker 镜像
+# 构建 Docker 镜像(未配置)
 cd manifest/docker
 ./docker.sh
 ```
@@ -244,7 +244,16 @@ opskvm/
 ......
 
 ## 界面预览
-![alt text](docs/image0.png) ![alt text](docs/image1.png) ![alt text](docs/image2.png) ![alt text](docs/image3.png) ![alt text](docs/image4.png) ![alt text](docs/image5.png) ![alt text](docs/image6.png) ![alt text](docs/image7.png) ![alt text](docs/image8.png) ![alt text](docs/image9.png)
+![alt text](docs/image9.png)
+![alt text](docs/image0.png) 
+![alt text](docs/image1.png) 
+![alt text](docs/image2.png) 
+![alt text](docs/image3.png) 
+![alt text](docs/image4.png) 
+![alt text](docs/image5.png) 
+![alt text](docs/image6.png) 
+![alt text](docs/image7.png) 
+![alt text](docs/image8.png) 
 
 
 ## 注意事项
