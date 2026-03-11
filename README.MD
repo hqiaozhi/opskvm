@@ -13,7 +13,7 @@ OPSKVM 是一个基于 Web 的 KVM (Keyboard-Video-Mouse) 远程管理系统，�
 - 一键启动
 
 ### KVM 控制
-- 视频流传输：通过 WebSocket 实时获取摄像头视频流
+- 视频流传输：通过 WebSocket 实时获取摄像头视频流(MJPEG格式)   
 - 键盘控制：支持通过 Web 远程发送键盘按键
 - 鼠标控制：支持鼠标模式切换和坐标传输
 - 配置管理：支持视频分辨率、帧率、压缩参数配置
@@ -27,12 +27,13 @@ OPSKVM 是一个基于 Web 的 KVM (Keyboard-Video-Mouse) 远程管理系统，�
 
 ### 文件管理
 - 文件浏览与列表
-- 文件上传（支持分片上传）
+- 文件上传（支持分块上传，秒传）
 - 文件下载
 - 目录创建
-- 设备挂载（USB设备、硬盘、分区可挂载到被控端）
+- 设备挂载（otg模式：USB设备、硬盘、分区可挂载到被控端）
 
 ### 镜像管理
+（需要otg模式才支持）
 - 镜像iso、img格式管理
 - 分片上传支持、秒传支持
 - URL 远程下载
@@ -184,18 +185,18 @@ cd manifest/docker
 
 ```
 opskvm/
-├── api/                    # API 接口定义
-│   ├── files/             # 文件管理 API
-│   ├── kvm/               # KVM 控制 API
+├── api/                  # API 接口定义
+│   ├── files/            # 文件管理 API
+│   ├── kvm/              # KVM 控制 API
 │   ├── mirrors/          # 镜像管理 API
 │   ├── system/           # 系统 API
 │   ├── totp/             # TOTP API
 │   ├── users/            # 用户管理 API
 │   ├── wake/             # WoL API
 │   └── webshell/         # WebShell API
-├── bin/                   # 编译产物
-├── hack/                  # 构建配置
-├── internal/              # 内部实现
+├── bin/                  # 编译产物（编译后生成）
+├── hack/                 # 构建配置
+├── internal/             # 内部实现
 │   ├── cmd/              # 命令行入口
 │   ├── config/           # 配置管理
 │   ├── controller/       # 控制器
@@ -209,9 +210,9 @@ opskvm/
 │       ├── sqlite/       # 数据库服务
 │       ├── video/        # 视频服务
 │       └── wol/          # WoL 服务
-├── manifest/              # 部署清单
+├── manifest/             # 部署清单
 │   └── docker/           # Docker 配置
-└── resource/              # 静态资源
+└── resource/             # 静态资源
 ```
 
 ## API 路由
@@ -247,10 +248,11 @@ opskvm/
 
 
 ## 注意事项
-
 - 本项目依赖 `github.com/korandiz/v4l` 库，仅支持 Linux 系统
 - 需要 root 权限运行以访问视频设备和 HID 设备
-- 默认 HTTPS 已启用，使用自签名证书
+- 默认 HTTPS 已启用，使用自签名证书，可通过配置禁用
+- 不支持找回密码，可以删除/data/opskvm/db.sqlite3后重启程序会恢复默认账号
+- 其它问题欢迎提issue
 
 ## 许可证
 
