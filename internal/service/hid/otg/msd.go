@@ -66,8 +66,13 @@ func (m *MSD) Bind(absoltePath, cdrom string) error {
 	}
 
 	// 写入配置
+	path3 := filepath.Join(m.funcPath, "lun.0/file")
+	err := m.Write(path3, "\n")
+	if err != nil {
+		return err
+	}
 	path1 := filepath.Join(m.funcPath, "lun.0/cdrom")
-	err := m.Write(path1, "\n")
+	err = m.Write(path1, "\n")
 	if err != nil {
 		return err
 	}
@@ -81,11 +86,6 @@ func (m *MSD) Bind(absoltePath, cdrom string) error {
 		return err
 	}
 	err = m.Write(path2, m.ro)
-	if err != nil {
-		return err
-	}
-	path3 := filepath.Join(m.funcPath, "lun.0/file")
-	err = m.Write(path3, "\n")
 	if err != nil {
 		return err
 	}
