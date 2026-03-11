@@ -37,7 +37,7 @@ type CIintInput struct {
 	Debug    bool   `short:"d" name:"debug" brief:"debug mode,default false (true/false)" orphan:"true"`
 	RootPath string `short:"D" name:"rootpath" default:"/data/opskvm/"  brief:"root path (save data)"`
 	Enroll   bool   `short:"" name:"enroll" brief:"defaut false (true/false)" orphan:"true"`
-	Ssl      bool   `short:"S" name:"ssl" brief:"defaut true (true/false)" orphan:"true"`
+	Ssl      bool   `short:"S" name:"ssl" default:"true" brief:"defaut true (true/false)" orphan:"true"`
 	Swagger  bool   `short:"" name:"swagger" brief:"defaut false (true/false)" orphan:"true"`
 	Cors     bool   `short:"" name:"cors" brief:"defaut false (true/false)" orphan:"true"`
 
@@ -80,8 +80,8 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 	service.New(in.RootPath, in.Debug, VersionString)
 
 	s := g.Server()
-	if !in.Ssl {
-		err = NewSSLGenerator().Generate(ctx, in.RootPath, "cn", []string{}, []string{})
+	if in.Ssl {
+		err = NewSSLGenerator().Generate(ctx, in.RootPath, "cn", []string{"10.168.10.225"}, []string{"10.168.10.225"})
 		if err != nil {
 			return nil, err
 		}
