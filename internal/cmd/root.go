@@ -81,7 +81,7 @@ func (c Init) Index(ctx context.Context, in CIintInput) (out *CInitOutput, err e
 
 	s := g.Server()
 	if in.Ssl {
-		err = NewSSLGenerator().Generate(ctx, in.RootPath, "cn", []string{"10.168.10.225"}, []string{"10.168.10.225"})
+		err = NewSSLGenerator().Generate(ctx, in.RootPath, "cn", []string{}, []string{})
 		if err != nil {
 			return nil, err
 		}
