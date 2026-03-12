@@ -1,14 +1,16 @@
 package otg
 
 import (
-	"context"
 	"fmt"
 	"opskvm/internal/service/hid"
 	"os"
 	"time"
 
 	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/os/gctx"
 )
+
+var ctx = gctx.New()
 
 // OTG 键盘按键编码（与CH9329保持一致）
 const (
@@ -203,7 +205,7 @@ func NewOTGKMHIDController() hid.KMHIDController {
 
 // SetAbsoluteMouse 设置鼠标是否使用绝对模式
 func (d *OTGKMHIDControl) SetAbsoluteMouse(absolute bool) error {
-	g.Log().Infof(context.Background(), "Setting absolute mouse mode to: %v", absolute)
+	g.Log().Infof(ctx, "Setting absolute mouse mode to: %v", absolute)
 
 	// 切换模式时关闭之前打开的鼠标设备
 	if d.absolute && !absolute {
@@ -211,14 +213,14 @@ func (d *OTGKMHIDControl) SetAbsoluteMouse(absolute bool) error {
 		if d.absoluteMouseDev != nil {
 			d.absoluteMouseDev.Close()
 			d.absoluteMouseDev = nil
-			g.Log().Info(context.Background(), "Closed absolute mouse device (switching to relative)")
+			g.Log().Info(ctx, "Closed absolute mouse device (switching to relative)")
 		}
 	} else if !d.absolute && absolute {
 		// 之前是相对模式，切换到绝对模式，关闭相对鼠标设备
 		if d.relativeMouseDev != nil {
 			d.relativeMouseDev.Close()
 			d.relativeMouseDev = nil
-			g.Log().Info(context.Background(), "Closed relative mouse device (switching to absolute)")
+			g.Log().Info(ctx, "Closed relative mouse device (switching to absolute)")
 		}
 	}
 
@@ -234,13 +236,13 @@ func (d *OTGKMHIDControl) SetAbsoluteMouse(absolute bool) error {
 
 // ReleaseAllKeys 释放所有按下的键，用于WebSocket断开时清理状态
 func (d *OTGKMHIDControl) ReleaseAllKeys() error {
-	g.Log().Info(context.Background(), "Releasing all keys...")
+	g.Log().Info(ctx, "Releasing all keys...")
 	d.modifiers = 0x00
 	d.activeKeys = make([]byte, 0)
 
 	// 如果设备未打开或键盘设备为空，直接返回成功
 	if !d.isOpen || d.keyboardDev == nil {
-		g.Log().Info(context.Background(), "Device not open, skipping key release")
+		g.Log().Info(ctx, "Device not open, skipping key release")
 		return nil
 	}
 
@@ -249,7 +251,7 @@ func (d *OTGKMHIDControl) ReleaseAllKeys() error {
 
 // ResetState 重置所有状态，包括键盘和鼠标状态
 func (d *OTGKMHIDControl) ResetState() {
-	g.Log().Info(context.Background(), "Resetting HID state...")
+	g.Log().Info(ctx, "Resetting HID state...")
 	d.modifiers = 0x00
 	d.activeKeys = make([]byte, 0)
 	d.mouseButtons = 0x00
@@ -282,7 +284,7 @@ func (d *OTGKMHIDControl) IsAbsoluteMouse() bool {
 func (d *OTGKMHIDControl) open() error {
 	var err error
 
-	g.Log().Infof(context.Background(), "Opening OTG HID devices...")
+	g.Log().Infof(ctx, "Opening OTG HID devices...")
 
 	// 重试次数
 	maxRetries := 5
@@ -290,13 +292,13 @@ func (d *OTGKMHIDControl) open() error {
 
 	// 打开键盘设备文件 (/dev/hidg0)，使用阻塞模式
 	for i := 0; i < maxRetries; i++ {
-		g.Log().Infof(context.Background(), "Opening keyboard device /dev/hidg0... (attempt %d/%d)", i+1, maxRetries)
+		g.Log().Infof(ctx, "Opening keyboard device /dev/hidg0... (attempt %d/%d)", i+1, maxRetries)
 		d.keyboardDev, err = os.OpenFile("/dev/hidg0", os.O_WRONLY, 0)
 		if err == nil {
-			g.Log().Infof(context.Background(), "Successfully opened /dev/hidg0")
+			g.Log().Infof(ctx, "Successfully opened /dev/hidg0")
 			break
 		}
-		g.Log().Errorf(context.Background(), "Failed to open /dev/hidg0: %v, retrying in %v...", err, retryDelay)
+		g.Log().Errorf(ctx, "Failed to open /dev/hidg0: %v, retrying in %v...", err, retryDelay)
 		time.Sleep(retryDelay)
 		if i == maxRetries-1 {
 			return fmt.Errorf("failed to open /dev/hidg0 after %d retries: %w", maxRetries, err)
@@ -305,13 +307,13 @@ func (d *OTGKMHIDControl) open() error {
 
 	// 打开绝对鼠标设备文件 (/dev/hidg1)，使用阻塞模式
 	for i := 0; i < maxRetries; i++ {
-		g.Log().Infof(context.Background(), "Opening absolute mouse device /dev/hidg1... (attempt %d/%d)", i+1, maxRetries)
+		g.Log().Infof(ctx, "Opening absolute mouse device /dev/hidg1... (attempt %d/%d)", i+1, maxRetries)
 		d.absoluteMouseDev, err = os.OpenFile("/dev/hidg1", os.O_WRONLY, 0)
 		if err == nil {
-			g.Log().Infof(context.Background(), "Successfully opened /dev/hidg1")
+			g.Log().Infof(ctx, "Successfully opened /dev/hidg1")
 			break
 		}
-		g.Log().Errorf(context.Background(), "Failed to open /dev/hidg1: %v, retrying in %v...", err, retryDelay)
+		g.Log().Errorf(ctx, "Failed to open /dev/hidg1: %v, retrying in %v...", err, retryDelay)
 		time.Sleep(retryDelay)
 		if i == maxRetries-1 {
 			d.keyboardDev.Close()
@@ -321,13 +323,13 @@ func (d *OTGKMHIDControl) open() error {
 
 	// 打开相对鼠标设备文件 (/dev/hidg2)，使用阻塞模式
 	for i := 0; i < maxRetries; i++ {
-		g.Log().Infof(context.Background(), "Opening relative mouse device /dev/hidg2... (attempt %d/%d)", i+1, maxRetries)
+		g.Log().Infof(ctx, "Opening relative mouse device /dev/hidg2... (attempt %d/%d)", i+1, maxRetries)
 		d.relativeMouseDev, err = os.OpenFile("/dev/hidg2", os.O_WRONLY, 0)
 		if err == nil {
-			g.Log().Infof(context.Background(), "Successfully opened /dev/hidg2")
+			g.Log().Infof(ctx, "Successfully opened /dev/hidg2")
 			break
 		}
-		g.Log().Errorf(context.Background(), "Failed to open /dev/hidg2: %v, retrying in %v...", err, retryDelay)
+		g.Log().Errorf(ctx, "Failed to open /dev/hidg2: %v, retrying in %v...", err, retryDelay)
 		time.Sleep(retryDelay)
 		if i == maxRetries-1 {
 			d.keyboardDev.Close()
@@ -338,7 +340,7 @@ func (d *OTGKMHIDControl) open() error {
 
 	// 设置设备为打开状态
 	d.isOpen = true
-	g.Log().Infof(context.Background(), "All OTG HID devices opened successfully")
+	g.Log().Infof(ctx, "All OTG HID devices opened successfully")
 	return nil
 }
 
@@ -359,17 +361,17 @@ func (d *OTGKMHIDControl) openKeyboardOnly() error {
 	maxRetries := 5
 	retryDelay := 200 * time.Millisecond
 
-	g.Log().Info(context.Background(), "Opening keyboard device only (delaying mouse device open)...")
+	g.Log().Info(ctx, "Opening keyboard device only (delaying mouse device open)...")
 
 	// 只打开键盘设备
 	for i := 0; i < maxRetries; i++ {
 		d.keyboardDev, err = os.OpenFile("/dev/hidg0", os.O_WRONLY, 0)
 		if err == nil {
-			g.Log().Infof(context.Background(), "Successfully opened /dev/hidg0 (keyboard)")
+			g.Log().Infof(ctx, "Successfully opened /dev/hidg0 (keyboard)")
 			d.isOpen = true
 			return nil
 		}
-		g.Log().Errorf(context.Background(), "Failed to open /dev/hidg0: %v, retrying in %v...", err, retryDelay)
+		g.Log().Errorf(ctx, "Failed to open /dev/hidg0: %v, retrying in %v...", err, retryDelay)
 		time.Sleep(retryDelay)
 	}
 
@@ -414,19 +416,19 @@ func (d *OTGKMHIDControl) Close() error {
 func (d *OTGKMHIDControl) SendKeyboardReport(modifier byte, keys []byte) error {
 	// 检查设备是否已打开，如果未打开则尝试打开
 	if !d.isOpen {
-		g.Log().Warningf(context.Background(), "Device not open, attempting to open keyboard...")
+		g.Log().Warningf(ctx, "Device not open, attempting to open keyboard...")
 		if err := d.openKeyboardOnly(); err != nil {
-			g.Log().Errorf(context.Background(), "Failed to open keyboard: %v", err)
+			g.Log().Errorf(ctx, "Failed to open keyboard: %v", err)
 			return nil
 		}
 	}
 
 	// 检查设备文件描述符是否有效
 	if d.keyboardDev == nil {
-		g.Log().Warningf(context.Background(), "Keyboard device not initialized, attempting to reopen...")
+		g.Log().Warningf(ctx, "Keyboard device not initialized, attempting to reopen...")
 		// 只重新打开键盘设备
 		if err := d.openKeyboardOnly(); err != nil {
-			g.Log().Errorf(context.Background(), "Failed to reopen keyboard: %v", err)
+			g.Log().Errorf(ctx, "Failed to reopen keyboard: %v", err)
 			d.isOpen = false
 			return nil
 		}
@@ -447,12 +449,12 @@ func (d *OTGKMHIDControl) SendKeyboardReport(modifier byte, keys []byte) error {
 		}
 	}
 
-	g.Log().Debugf(context.Background(), "Sending keyboard report: modifier=0x%02x, keys=%v, report=%v", modifier, keys, report)
+	g.Log().Debugf(ctx, "Sending keyboard report: modifier=0x%02x, keys=%v, report=%v", modifier, keys, report)
 
 	// 写入键盘设备文件（带超时）
 	n, err := d.writeWithTimeout(d.keyboardDev, report, 2*time.Second)
 	if err != nil {
-		g.Log().Errorf(context.Background(), "Failed to write keyboard report: %v (wrote %d bytes), attempting to reconnect...", err, n)
+		g.Log().Warningf(ctx, "Failed to write keyboard report: %v (wrote %d bytes), attempting to reconnect...", err, n)
 		// 关闭键盘设备
 		if d.keyboardDev != nil {
 			d.keyboardDev.Close()
@@ -461,7 +463,7 @@ func (d *OTGKMHIDControl) SendKeyboardReport(modifier byte, keys []byte) error {
 
 		// 尝试重新打开键盘设备
 		if reopenErr := d.openKeyboardOnly(); reopenErr != nil {
-			g.Log().Errorf(context.Background(), "Failed to reopen keyboard: %v", reopenErr)
+			g.Log().Errorf(ctx, "Failed to reopen keyboard: %v", reopenErr)
 			d.isOpen = false
 			return fmt.Errorf("keyboard write failed and reconnect failed: %w", err)
 		}
@@ -472,7 +474,7 @@ func (d *OTGKMHIDControl) SendKeyboardReport(modifier byte, keys []byte) error {
 		// 再次尝试写入
 		n, err = d.writeWithTimeout(d.keyboardDev, report, 2*time.Second)
 		if err != nil {
-			g.Log().Errorf(context.Background(), "Failed to write keyboard report after reconnect: %v (wrote %d bytes)", err, n)
+			g.Log().Warningf(ctx, "Failed to write keyboard report after reconnect: %v (wrote %d bytes)", err, n)
 			// 关闭键盘设备并重置状态
 			if d.keyboardDev != nil {
 				d.keyboardDev.Close()
@@ -481,7 +483,7 @@ func (d *OTGKMHIDControl) SendKeyboardReport(modifier byte, keys []byte) error {
 			d.isOpen = false
 			return fmt.Errorf("keyboard write failed after reconnect: %w", err)
 		}
-		g.Log().Infof(context.Background(), "Successfully wrote keyboard report after reconnect")
+		g.Log().Infof(ctx, "Successfully wrote keyboard report after reconnect")
 	}
 	return nil
 }
@@ -490,9 +492,9 @@ func (d *OTGKMHIDControl) SendKeyboardReport(modifier byte, keys []byte) error {
 func (d *OTGKMHIDControl) sendMouseReportInternal(buttons byte, dx, dy int, wheelY int8) error {
 	// 检查设备是否已打开，如果未打开则尝试打开键盘
 	if !d.isOpen {
-		g.Log().Warningf(context.Background(), "Device not open, attempting to open keyboard...")
+		g.Log().Warningf(ctx, "Device not open, attempting to open keyboard...")
 		if err := d.openKeyboardOnly(); err != nil {
-			g.Log().Errorf(context.Background(), "Failed to open keyboard: %v", err)
+			g.Log().Errorf(ctx, "Failed to open keyboard: %v", err)
 			return nil
 		}
 	}
@@ -500,9 +502,9 @@ func (d *OTGKMHIDControl) sendMouseReportInternal(buttons byte, dx, dy int, whee
 	// 延迟打开鼠标设备，只在第一次使用鼠标时打开（失败后不再重试）
 	if d.absolute {
 		if d.absoluteMouseDev == nil && !d.absoluteMouseFailed {
-			g.Log().Info(context.Background(), "Opening absolute mouse device on first use...")
+			g.Log().Info(ctx, "Opening absolute mouse device on first use...")
 			if err := d.openAbsoluteMouse(); err != nil {
-				g.Log().Errorf(context.Background(), "Failed to open absolute mouse: %v", err)
+				g.Log().Errorf(ctx, "Failed to open absolute mouse: %v", err)
 				d.absoluteMouseFailed = true // 标记失败，不再重试
 			}
 		}
@@ -513,9 +515,9 @@ func (d *OTGKMHIDControl) sendMouseReportInternal(buttons byte, dx, dy int, whee
 	}
 
 	if d.relativeMouseDev == nil && !d.relativeMouseFailed {
-		g.Log().Info(context.Background(), "Opening relative mouse device on first use...")
+		g.Log().Info(ctx, "Opening relative mouse device on first use...")
 		if err := d.openRelativeMouse(); err != nil {
-			g.Log().Warningf(context.Background(), "Failed to open relative mouse: %v", err)
+			g.Log().Warningf(ctx, "Failed to open relative mouse: %v", err)
 			d.relativeMouseFailed = true // 标记失败，不再重试
 		}
 	}
@@ -535,19 +537,19 @@ func (d *OTGKMHIDControl) SendMouseReport(buttons byte, dx, dy int, wheel int8) 
 func (d *OTGKMHIDControl) SendRelativeMouseReport(buttons byte, dx, dy int, wheelY int8) error {
 	// 检查键盘设备是否已打开，如果未打开则尝试打开
 	if !d.isOpen {
-		g.Log().Warningf(context.Background(), "Device not open, attempting to open keyboard...")
+		g.Log().Warningf(ctx, "Device not open, attempting to open keyboard...")
 		if err := d.openKeyboardOnly(); err != nil {
-			g.Log().Errorf(context.Background(), "Failed to open keyboard: %v", err)
+			g.Log().Errorf(ctx, "Failed to open keyboard: %v", err)
 			return nil
 		}
 	}
 
 	// 检查设备文件描述符是否有效
 	if d.relativeMouseDev == nil {
-		g.Log().Warningf(context.Background(), "Relative mouse device not initialized, attempting to reopen...")
+		g.Log().Warningf(ctx, "Relative mouse device not initialized, attempting to reopen...")
 		// 只打开相对鼠标设备
 		if err := d.openRelativeMouse(); err != nil {
-			g.Log().Errorf(context.Background(), "Failed to reopen relative mouse: %v", err)
+			g.Log().Errorf(ctx, "Failed to reopen relative mouse: %v", err)
 			return nil
 		}
 	}
@@ -617,13 +619,13 @@ func (d *OTGKMHIDControl) SendRelativeMouseReport(buttons byte, dx, dy int, whee
 	report[2] = adjustedDy    // 调整后的Y增量
 	report[3] = adjustedWheel // 调整后的滚轮增量
 
-	g.Log().Debugf(context.Background(), "Sending relative mouse report: report=%v", report)
+	g.Log().Debugf(ctx, "Sending relative mouse report: report=%v", report)
 
 	// 写入相对鼠标设备文件 (/dev/hidg2)，带超时
 	n, err := d.writeWithTimeout(d.relativeMouseDev, report, 2*time.Second)
 	if err != nil {
 		// 鼠标写入失败，只记录错误，不影响其他设备
-		g.Log().Errorf(context.Background(), "Failed to write relative mouse report: %v (wrote %d bytes), skipping...", err, n)
+		g.Log().Warningf(ctx, "Failed to write relative mouse report: %v (wrote %d bytes), skipping...", err, n)
 		// 关闭鼠标设备
 		if d.relativeMouseDev != nil {
 			d.relativeMouseDev.Close()
@@ -639,19 +641,19 @@ func (d *OTGKMHIDControl) SendRelativeMouseReport(buttons byte, dx, dy int, whee
 func (d *OTGKMHIDControl) SendAbsoluteMouseReport(buttons byte, x, y int, wheelY int8) error {
 	// 检查键盘设备是否已打开，如果未打开则尝试打开
 	if !d.isOpen {
-		g.Log().Warningf(context.Background(), "Device not open, attempting to open keyboard...")
+		g.Log().Warningf(ctx, "Device not open, attempting to open keyboard...")
 		if err := d.openKeyboardOnly(); err != nil {
-			g.Log().Errorf(context.Background(), "Failed to open keyboard: %v", err)
+			g.Log().Errorf(ctx, "Failed to open keyboard: %v", err)
 			return nil
 		}
 	}
 
 	// 检查设备文件描述符是否有效
 	if d.absoluteMouseDev == nil {
-		g.Log().Warningf(context.Background(), "Absolute mouse device not initialized, attempting to reopen...")
+		g.Log().Warningf(ctx, "Absolute mouse device not initialized, attempting to reopen...")
 		// 只打开绝对鼠标设备
 		if err := d.openAbsoluteMouse(); err != nil {
-			g.Log().Errorf(context.Background(), "Failed to reopen absolute mouse: %v", err)
+			g.Log().Errorf(ctx, "Failed to reopen absolute mouse: %v", err)
 			return nil
 		}
 	}
@@ -692,13 +694,13 @@ func (d *OTGKMHIDControl) SendAbsoluteMouseReport(buttons byte, x, y int, wheelY
 	report[4] = byte(y >> 8)   // Y坐标高字节
 	report[5] = adjustedWheel  // 调整后的滚轮增量
 
-	g.Log().Debugf(context.Background(), "Sending absolute mouse report: x=%d, y=%d, report=%v", x, y, report)
+	g.Log().Debugf(ctx, "Sending absolute mouse report: x=%d, y=%d, report=%v", x, y, report)
 
 	// 写入绝对鼠标设备文件 (/dev/hidg1)，带超时
 	n, err := d.writeWithTimeout(d.absoluteMouseDev, report, 2*time.Second)
 	if err != nil {
 		// 鼠标写入失败，只记录错误，不影响其他设备
-		g.Log().Errorf(context.Background(), "Failed to write absolute mouse report: %v (wrote %d bytes), skipping...", err, n)
+		g.Log().Warningf(ctx, "Failed to write absolute mouse report: %v (wrote %d bytes), skipping...", err, n)
 		// 关闭鼠标设备
 		if d.absoluteMouseDev != nil {
 			d.absoluteMouseDev.Close()
@@ -750,10 +752,10 @@ func (d *OTGKMHIDControl) openAbsoluteMouse() error {
 	for i := 0; i < maxRetries; i++ {
 		d.absoluteMouseDev, err = os.OpenFile("/dev/hidg1", os.O_WRONLY, 0)
 		if err == nil {
-			g.Log().Infof(context.Background(), "Successfully opened /dev/hidg1 (absolute mouse)")
+			g.Log().Infof(ctx, "Successfully opened /dev/hidg1 (absolute mouse)")
 			return nil
 		}
-		g.Log().Warningf(context.Background(), "Failed to open /dev/hidg1: %v, retrying...", err)
+		g.Log().Warningf(ctx, "Failed to open /dev/hidg1: %v, retrying...", err)
 		time.Sleep(retryDelay)
 	}
 	return fmt.Errorf("failed to open /dev/hidg1 after %d retries: %w", maxRetries, err)
@@ -768,10 +770,10 @@ func (d *OTGKMHIDControl) openRelativeMouse() error {
 	for i := 0; i < maxRetries; i++ {
 		d.relativeMouseDev, err = os.OpenFile("/dev/hidg2", os.O_WRONLY, 0)
 		if err == nil {
-			g.Log().Infof(context.Background(), "Successfully opened /dev/hidg2 (relative mouse)")
+			g.Log().Infof(ctx, "Successfully opened /dev/hidg2 (relative mouse)")
 			return nil
 		}
-		g.Log().Warningf(context.Background(), "Failed to open /dev/hidg2: %v, retrying...", err)
+		g.Log().Warningf(ctx, "Failed to open /dev/hidg2: %v, retrying...", err)
 		time.Sleep(retryDelay)
 	}
 	return fmt.Errorf("failed to open /dev/hidg2 after %d retries: %w", maxRetries, err)

@@ -1,7 +1,6 @@
 package otg
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -34,7 +33,7 @@ func WaitForUDC(maxWaitTime time.Duration, checkInterval time.Duration) (string,
 				udcNames[i] = udc.Name()
 			}
 			sort.Strings(udcNames)
-			gLog.Log().Infof(context.Background(), "Found UDC device: %s", udcNames[0])
+			gLog.Log().Infof(ctx, "Found UDC device: %s", udcNames[0])
 			return udcNames[0], nil
 		}
 
@@ -42,7 +41,7 @@ func WaitForUDC(maxWaitTime time.Duration, checkInterval time.Duration) (string,
 			return "", fmt.Errorf("Gadget: Timeout waiting for UDC device")
 		}
 
-		gLog.Log().Infof(context.Background(), "Waiting for UDC device to be inserted...")
+		gLog.Log().Infof(ctx, "Waiting for UDC device to be inserted...")
 		time.Sleep(checkInterval)
 	}
 }
@@ -65,14 +64,14 @@ func StartUDCWatcher(udcName string, onLost func(), onReconnect func()) {
 		for {
 			select {
 			case <-UDCWatcherStopCh:
-				gLog.Log().Info(context.Background(), "UDC watcher stopped")
+				gLog.Log().Info(ctx, "UDC watcher stopped")
 				return
 			case <-UDCWatcherRestartCh:
-				gLog.Log().Info(context.Background(), "UDC watcher restarting...")
+				gLog.Log().Info(ctx, "UDC watcher restarting...")
 				continue
 			default:
 				if !CheckUDCExists(udcName) {
-					gLog.Log().Warningf(context.Background(), "UDC device %s lost!", udcName)
+					gLog.Log().Warningf(ctx, "UDC device %s lost!", udcName)
 					if onLost != nil {
 						onLost()
 					}
@@ -83,7 +82,7 @@ func StartUDCWatcher(udcName string, onLost func(), onReconnect func()) {
 							return
 						default:
 							if CheckUDCExists(udcName) {
-								gLog.Log().Infof(context.Background(), "UDC device %s reconnected!", udcName)
+								gLog.Log().Infof(ctx, "UDC device %s reconnected!", udcName)
 								if onReconnect != nil {
 									onReconnect()
 								}
@@ -98,7 +97,7 @@ func StartUDCWatcher(udcName string, onLost func(), onReconnect func()) {
 			}
 		}
 	}()
-	gLog.Log().Infof(context.Background(), "UDC watcher started for device: %s", udcName)
+	gLog.Log().Infof(ctx, "UDC watcher started for device: %s", udcName)
 }
 
 // StopUDCWatcher 停止 UDC 设备监控器

@@ -294,7 +294,7 @@ func (c *ControllerV1) handleWSMessage(ctx context.Context, clt *video.Client, m
 			return
 		}
 		absolute := c.kvm.SVC.HID.IsAbsoluteMouse()
-		g.Log().Debugf(ctx, "WS Mouse Data - Type: %d, Mode: %v, Data: %+v", wsMsg.Type, absolute, mouseData)
+		g.Log().Debugf(ctx, "WS Mouse Data - Type: %v, Mode: %v, Data: %+v", wsMsg.Type, absolute, mouseData)
 
 		// 记录所有鼠标事件，包括纯移动事件
 		g.Log().Debugf(ctx, "Mouse event: buttons=0x%02x, dx=%d, dy=%d, wheel=%d", mouseData.Buttons, mouseData.DX, mouseData.DY, mouseData.Wheel)
