@@ -122,6 +122,15 @@ func (c *ControllerV1) Stream(ctx context.Context, req *v1.StreamReq) (res *v1.S
 	}
 	defer c.kvm.SVC.Streamer.RemoveClient(clt)
 
+	// 确保连接断开时释放所有按键
+	defer func() {
+		if c.kvm.SVC.HID != nil {
+			g.Log().Info(ctx, "WebSocket connection closed, releasing all keys...")
+			c.kvm.SVC.HID.ReleaseAllKeys()
+			c.kvm.SVC.HID.ResetState()
+		}
+	}()
+
 	// 启动消息接收协程
 	go func() {
 		for {

@@ -1,7 +1,10 @@
 package ch9329
 
 import (
+	"context"
 	"time"
+
+	gLog "github.com/gogf/gf/v2/frame/g"
 )
 
 // CH9329 键盘按键编码（部分常用键）
@@ -205,6 +208,47 @@ func (d *CH9329Device) PressKeyWithModifier(modifier byte, key byte) error {
 	time.Sleep(10 * time.Millisecond)
 
 	return nil
+}
+
+// ReleaseAllKeys 释放所有按下的键，用于WebSocket断开时清理状态
+func (d *CH9329Device) ReleaseAllKeys() error {
+	gLog.Log().Info(context.Background(), "CH9329: Releasing all keys...")
+	d.modifiers = 0x00
+	d.activeKeys = make([]byte, 0)
+
+	// 如果端口未打开，直接返回成功
+	if d.port == nil {
+		gLog.Log().Info(context.Background(), "CH9329: Port not open, skipping key release")
+		return nil
+	}
+
+	return d.SendKeyboardReport(0x00, []byte{})
+}
+
+// ResetState 重置所有状态，包括键盘和鼠标状态
+func (d *CH9329Device) ResetState() {
+	gLog.Log().Info(context.Background(), "CH9329: Resetting HID state...")
+	d.modifiers = 0x00
+	d.activeKeys = make([]byte, 0)
+	d.mouseButtons = 0x00
+	d.mouseX = 0
+	d.mouseY = 0
+	d.mouseDeltaX = 0
+	d.mouseDeltaY = 0
+	d.mouseWheel = 0
+}
+
+// GetKeyboardState 获取当前键盘状态
+func (d *CH9329Device) GetKeyboardState() (byte, []byte) {
+	return d.modifiers, d.activeKeys
+}
+
+// GetMouseState 获取当前鼠标状态
+func (d *CH9329Device) GetMouseState() (byte, int, int) {
+	if d.absolute {
+		return d.mouseButtons, d.mouseX, d.mouseY
+	}
+	return d.mouseButtons, d.mouseDeltaX, d.mouseDeltaY
 }
 
 // ClearScreen 清屏（模拟 Ctrl+L 快捷键）

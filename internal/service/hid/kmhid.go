@@ -26,4 +26,10 @@ type KMHIDController interface {
 	// 共有功能方法
 	ClearScreen() error
 	Reboot() error
+
+	// 状态管理
+	ReleaseAllKeys() error
+	ResetState()
+	GetKeyboardState() (byte, []byte)
+	GetMouseState() (byte, int, int)
 }

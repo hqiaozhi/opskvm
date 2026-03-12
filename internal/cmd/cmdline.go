@@ -18,9 +18,16 @@ func (c Init) cmdLine(ctx context.Context, in CIintInput) error {
 	}
 
 	// 设置Debug模式
+	// set loglevel
+	g.Log().SetTimeFormat("2006-01-02 15:04:05.999")
 	g.SetDebug(in.Debug)
 	if in.Debug {
 		g.Log().SetLevelStr("debug")
+	} else {
+		err := g.Log().SetLevelStr(in.LogLevel)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Device
@@ -30,13 +37,6 @@ func (c Init) cmdLine(ctx context.Context, in CIintInput) error {
 		}
 		os.Exit(0)
 		return nil
-	}
-
-	// set loglevel
-	g.Log().SetTimeFormat("2006-01-02 15:04:05.999")
-	err := g.Log().SetLevelStr(in.LogLevel)
-	if err != nil {
-		return err
 	}
 
 	return nil
