@@ -3,7 +3,7 @@ NAMESPACE   = "default"
 DEPLOY_NAME = "template-single"
 DOCKER_NAME = "template-single"
 
-VERSION=v0.0.3
+VERSION=v0.0.4
 
 include ./hack/hack-cli.mk
 include ./hack/hack.mk
