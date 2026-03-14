@@ -262,7 +262,3 @@ opskvm/
 - 默认 HTTPS 已启用，使用自签名证书，可通过配置禁用
 - 不支持找回密码，可以删除/data/opskvm/db.sqlite3后重启程序会恢复默认账号
 - 其它问题欢迎提issue
-
-## 许可证
-
-MIT License
